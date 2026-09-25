@@ -9,7 +9,7 @@ class SaveCallEvaluationScorecardRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return in_array($this->user()?->role, ['admin', 'manager'], true);
+        return in_array($this->user()?->role, ['admin', 'manager', 'qa_admin'], true);
     }
 
     public function rules(): array

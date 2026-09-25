@@ -251,6 +251,15 @@ export default function LeaveRequests({
                 fullWidth
                 maxWidth="sm"
                 aria-labelledby="apply-leave-title"
+                slotProps={{
+                    paper: {
+                        sx: {
+                            m: { xs: 2, sm: 4 },
+                            width: { xs: 'calc(100% - 32px)', sm: '100%' },
+                            maxHeight: 'calc(100dvh - 32px)',
+                        },
+                    },
+                }}
             >
                 <DialogTitle
                     id="apply-leave-title"
@@ -266,6 +275,12 @@ export default function LeaveRequests({
                     </IconButton>
                 </DialogTitle>
                 <form
+                    style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        minHeight: 0,
+                        overflow: 'hidden',
+                    }}
                     onSubmit={(e) => {
                         e.preventDefault();
                         form.post('/leave-requests', {
@@ -273,14 +288,24 @@ export default function LeaveRequests({
                         });
                     }}
                 >
-                    <DialogContent className="space-y-5">
+                    <DialogContent
+                        dividers
+                        sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 3,
+                            px: { xs: 2, sm: 3 },
+                            py: 3,
+                            '& > *': { flexShrink: 0 },
+                        }}
+                    >
                         <Alert severity="info">
                             {isLeader
                                 ? 'Your request goes directly to an admin.'
                                 : 'Your team leader reviews first, then an admin gives final approval.'}{' '}
                             Paid status is determined by the admin.
                         </Alert>
-                        <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-6 sm:grid-cols-2">
                             <DateTimeField
                                 label="Start date"
                                 value={form.data.start_date}
@@ -343,7 +368,9 @@ export default function LeaveRequests({
                             </Alert>
                         )}
                     </DialogContent>
-                    <DialogActions sx={{ px: 3, pb: 3 }}>
+                    <DialogActions
+                        sx={{ px: { xs: 2, sm: 3 }, py: 2, flexShrink: 0 }}
+                    >
                         <Button
                             type="submit"
                             variant="contained"
@@ -387,7 +414,6 @@ export default function LeaveRequests({
                                 },
                             );
                         }
-
                     }}
                 >
                     <DialogContent className="space-y-5">

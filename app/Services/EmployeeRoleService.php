@@ -11,6 +11,7 @@ class EmployeeRoleService
     public const ROLES = [
         'Admin' => 'admin',
         'Manager' => 'manager',
+        'QA Assessment Admin' => 'qa_admin',
         'Team Leader' => 'team_leader',
         'Agent' => 'agent',
         'Trainee' => 'trainee',

@@ -17,7 +17,7 @@ class CoachingExportController extends Controller
         $evaluation = $coaching->callEvaluation;
         if ($evaluation) {
             $access->authorizeTeam($request->user(), $evaluation->team_id, $evaluation->employee_id);
-            abort_unless($evaluation->status === 'submitted' || in_array($request->user()->role, ['admin', 'manager'], true), 404);
+            abort_unless($evaluation->status === 'submitted' || in_array($request->user()->role, ['admin', 'manager', 'qa_admin'], true), 404);
         }
         $lines = [
             'Coaching Log #'.$coaching->id,

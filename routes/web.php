@@ -53,15 +53,21 @@ Route::get('/', function (Request $request) {
     $request->session()->invalidate();
     $request->session()->regenerateToken();
 
-    return to_route('login');
+    return to_route('careers');
 })->name('home');
-Route::inertia('/careers', 'welcome')->name('careers');
+Route::get('/careers', fn (\App\Services\PublicFormService $forms) => \Inertia\Inertia::render('welcome', ['publicForms' => ['application' => $forms->definition('application'), 'business' => $forms->definition('business')]]))->name('careers');
+Route::post('business-inquiries', [\App\Http\Controllers\BusinessInquiryController::class, 'store'])->middleware('throttle:5,10')->name('business-inquiries.store');
 Route::inertia('/applicant-portal', 'applicant-portal')->name('applicant-portal');
 Route::post('apply', [JobApplicationController::class, 'store'])->middleware('throttle:5,1')->name('applications.store');
 Route::get('application-status/challenge', [ApplicantStatusController::class, 'challenge'])->middleware('throttle:10,1')->name('application-status.challenge');
 Route::post('application-status', [ApplicantStatusController::class, 'lookup'])->middleware('throttle:5,10')->name('application-status.lookup');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('public-form-settings', [\App\Http\Controllers\PublicFormSettingsController::class, 'index'])->name('public-form-settings');
+    Route::put('public-form-settings/{kind}', [\App\Http\Controllers\PublicFormSettingsController::class, 'update'])->name('public-form-settings.update');
+    Route::get('business-inquiries', [\App\Http\Controllers\BusinessInquiryController::class, 'index'])->name('business-inquiries.index');
+    Route::patch('business-inquiries/{inquiry}', [\App\Http\Controllers\BusinessInquiryController::class, 'update'])->name('business-inquiries.update');
+    Route::post('business-inquiries/{inquiry}/email', [\App\Http\Controllers\BusinessInquiryController::class, 'retry'])->middleware('throttle:5,1')->name('business-inquiries.email');
     Route::get('trainees', [\App\Http\Controllers\TraineeController::class, 'index'])->name('trainees');
     Route::patch('trainees/{trainee}/review', [\App\Http\Controllers\TraineeController::class, 'review']);
     Route::get('my-records', [\App\Http\Controllers\PersonalWorkspaceController::class, 'records'])->name('personal.records');

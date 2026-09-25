@@ -38,11 +38,14 @@ class CallEvaluationController extends Controller
         return Inertia::render('quality/evaluations/index', [
             'evaluations' => $query->latest('updated_at')->paginate(15)->withQueryString(),
             'filters' => $filters,
+            'creationScorecards' => in_array($request->user()->role, ['admin', 'manager', 'qa_admin'], true)
+                ? CallEvaluationScorecard::query()->where('status', 'active')->with('campaigns:id,name')->orderBy('name')->get(['id', 'name', 'applies_to_all_campaigns'])
+                : null,
             'employees' => $this->employees()->when($request->user()->role === 'team_leader', fn ($employees) => $employees->filter(fn ($employee) => in_array($employee->teamMembership?->team_id, $access->teamIds($request->user()), true)))->values(),
             'campaigns' => Campaign::query()->when($request->user()->role === 'team_leader', fn ($q) => $q->whereHas('teams', fn ($q) => $q->whereIn('teams.id', $access->teamIds($request->user()))))->orderBy('name')->get(['id', 'name']),
             'teams' => Team::query()->when($request->user()->role === 'team_leader', fn ($q) => $q->whereIn('id', $access->teamIds($request->user())))->orderBy('name')->get(['id', 'name', 'campaign_id']),
             'scorecards' => CallEvaluationScorecard::query()->when($request->user()->role === 'team_leader', fn ($q) => $q->whereIn('id', $access->scope(CallEvaluation::query(), $request->user())->select('scorecard_id')))->orderBy('name')->get(['id', 'name', 'status']),
-            'evaluators' => User::query()->whereIn('role', ['admin', 'manager'])->when($request->user()->role === 'team_leader', fn ($q) => $q->whereIn('id', $access->scope(CallEvaluation::query(), $request->user())->select('evaluator_id')))->orderBy('name')->get(['id', 'name']),
+            'evaluators' => User::query()->whereIn('role', ['admin', 'manager', 'qa_admin'])->when($request->user()->role === 'team_leader', fn ($q) => $q->whereIn('id', $access->scope(CallEvaluation::query(), $request->user())->select('evaluator_id')))->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -55,6 +58,7 @@ class CallEvaluationController extends Controller
     {
         $data = $request->validate([
             'employee_id' => ['required', 'integer', Rule::exists('users', 'id')->whereIn('role', ['agent', 'team_leader'])],
+            'team_id' => ['nullable', 'integer', 'exists:teams,id'],
             'scorecard_id' => ['required', 'integer', 'exists:call_evaluation_scorecards,id'],
             'call_at' => ['required', 'date'], 'call_direction' => ['required', Rule::in(['inbound', 'outbound'])],
             'call_reference' => ['nullable', 'string', 'max:255'], 'recording' => $this->recordingRules(false), 'evaluation_document' => $this->documentRules(),
@@ -146,7 +150,7 @@ class CallEvaluationController extends Controller
     public function recording(Request $request, CallEvaluation $evaluation, QaAccessService $access): BinaryFileResponse
     {
         $access->authorizeTeam($request->user(), $evaluation->team_id, $evaluation->employee_id);
-        abort_unless($evaluation->status === 'submitted' || in_array($request->user()->role, ['admin', 'manager'], true), 404);
+        abort_unless($evaluation->status === 'submitted' || in_array($request->user()->role, ['admin', 'manager', 'qa_admin'], true), 404);
         abort_unless($evaluation->storage_disk && $evaluation->storage_key, 404);
         $disk = Storage::disk($evaluation->storage_disk);
         abort_unless($disk->exists($evaluation->storage_key), 404);
@@ -157,7 +161,7 @@ class CallEvaluationController extends Controller
     public function document(Request $request, CallEvaluation $evaluation, QaAccessService $access): BinaryFileResponse
     {
         $access->authorizeTeam($request->user(), $evaluation->team_id, $evaluation->employee_id);
-        abort_unless($evaluation->status === 'submitted' || in_array($request->user()->role, ['admin', 'manager'], true), 404);
+        abort_unless($evaluation->status === 'submitted' || in_array($request->user()->role, ['admin', 'manager', 'qa_admin'], true), 404);
         abort_unless($evaluation->document_storage_disk && $evaluation->document_storage_key, 404);
         $disk = Storage::disk($evaluation->document_storage_disk);
         abort_unless($disk->exists($evaluation->document_storage_key), 404);
@@ -184,7 +188,13 @@ class CallEvaluationController extends Controller
 
     private function employees()
     {
-        return User::query()->whereIn('role', ['agent', 'team_leader'])->where('status', 'active')->whereHas('teamMembership.team.campaign')->with('teamMembership.team.campaign:id,name')->orderBy('name')->get(['id', 'name', 'username']);
+        return User::query()->whereIn('role', ['agent', 'team_leader'])->where('status', 'active')
+            ->with(['teamMembership.team.campaign:id,name', 'ledTeamAssignments.team.campaign:id,name'])
+            ->orderBy('name')->get(['id', 'name', 'username', 'role'])
+            ->each(function (User $employee) {
+                $employee->setAttribute('evaluation_teams', app(\App\Services\CallEvaluationEmployeeTeams::class)->forEmployee($employee)
+                    ->map(fn ($team) => ['id' => $team->id, 'name' => $team->name, 'campaign' => ['id' => $team->campaign->id, 'name' => $team->campaign->name]]));
+            });
     }
 
     private function recordingRules(bool $required): array

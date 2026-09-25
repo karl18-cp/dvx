@@ -12,8 +12,11 @@ class CallEvaluationSnapshotService
 {
     public function createEvaluation(CallEvaluationScorecard $scorecard, User $employee, User $evaluator, array $attributes): CallEvaluation
     {
-        $employee->loadMissing('teamMembership.team.campaign');
-        $team = $employee->teamMembership?->team;
+        throw_if($employee->status !== 'active' || ! in_array($employee->role, ['agent', 'team_leader'], true), ValidationException::withMessages(['employee_id' => 'Choose an active agent or team leader.']));
+        $teams = app(CallEvaluationEmployeeTeams::class)->forEmployee($employee);
+        $selectedTeamId = $attributes['team_id'] ?? null;
+        $team = $selectedTeamId ? $teams->firstWhere('id', (int) $selectedTeamId) : ($teams->count() === 1 ? $teams->first() : null);
+        throw_if($teams->isNotEmpty() && ! $team, ValidationException::withMessages(['team_id' => 'Choose one of this employee’s assigned teams.']));
         $campaign = $team?->campaign;
         throw_if(! $team || ! $campaign, ValidationException::withMessages(['employee_id' => 'The employee must belong to a Campaign team.']));
 

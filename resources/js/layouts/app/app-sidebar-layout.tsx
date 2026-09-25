@@ -15,7 +15,9 @@ export default function AppSidebarLayout({
     const { auth } = usePage<{ auth: Auth }>().props;
 
     return (
-        <DiverTextUnreadProvider enabled={auth.user.role !== 'trainee'}>
+        <DiverTextUnreadProvider
+            enabled={!['trainee', 'qa_admin'].includes(auth.user.role)}
+        >
             <AppShell variant="sidebar">
                 <AppSidebar />
                 <AppContent
@@ -25,7 +27,9 @@ export default function AppSidebarLayout({
                     <AppSidebarHeader breadcrumbs={breadcrumbs} />
                     {children}
                 </AppContent>
-                {auth.user.role !== 'trainee' && <MessageWidget />}
+                {!['trainee', 'qa_admin'].includes(auth.user.role) && (
+                    <MessageWidget />
+                )}
             </AppShell>
         </DiverTextUnreadProvider>
     );

@@ -1,4 +1,6 @@
 import { Head, Link, router } from '@inertiajs/react';
+import { useState } from 'react';
+import CreateEvaluation, { type Employee, type Scorecard } from './create';
 import { DateTimeField } from '@/components/date-time-field';
 
 type Ref = { id: number; name: string };
@@ -31,15 +33,18 @@ export default function Index({
     teams,
     scorecards,
     evaluators,
+    creationScorecards,
 }: {
     evaluations: Page;
     filters: Record<string, string>;
-    employees: Ref[];
+    employees: Employee[];
+    creationScorecards: Scorecard[] | null;
     campaigns: Ref[];
     teams: Ref[];
     scorecards: Ref[];
     evaluators: Ref[];
 }) {
+    const [creating, setCreating] = useState(false);
     const set = (key: string, value: string) =>
         router.get(
             '/management/call-evaluations',
@@ -69,12 +74,15 @@ export default function Index({
                             Score recorded calls using an approved QA Scorecard.
                         </p>
                     </div>
-                    <Link
-                        className="rounded-xl bg-red-700 px-5 py-3 font-bold text-white"
-                        href="/management/call-evaluations/create"
-                    >
-                        New Evaluation
-                    </Link>
+                    {creationScorecards !== null && (
+                        <button
+                            type="button"
+                            className="rounded-xl bg-red-700 px-5 py-3 font-bold text-white"
+                            onClick={() => setCreating(true)}
+                        >
+                            New Evaluation
+                        </button>
+                    )}
                 </header>
                 <section className="grid gap-2 rounded-2xl border bg-white p-4 md:grid-cols-4">
                     <Filter
@@ -128,13 +136,23 @@ export default function Index({
                         Clear Filters
                     </button>
                     <DateTimeField
-                        className="rounded-lg border px-3 py-2"
+                        label="From date"
+                        size="small"
+                        sx={{
+                            '& .MuiOutlinedInput-root': { height: 42 },
+                            '& .MuiInputBase-input': { fontSize: '0.875rem' },
+                        }}
                         type="date"
                         value={filters.from || ''}
                         onChange={(e) => set('from', e.target.value)}
                     />
                     <DateTimeField
-                        className="rounded-lg border px-3 py-2"
+                        label="To date"
+                        size="small"
+                        sx={{
+                            '& .MuiOutlinedInput-root': { height: 42 },
+                            '& .MuiInputBase-input': { fontSize: '0.875rem' },
+                        }}
                         type="date"
                         value={filters.to || ''}
                         onChange={(e) => set('to', e.target.value)}
@@ -244,6 +262,13 @@ export default function Index({
                     </div>
                 )}
             </div>
+            {creating && creationScorecards && (
+                <CreateEvaluation
+                    employees={employees}
+                    scorecards={creationScorecards}
+                    onClose={() => setCreating(false)}
+                />
+            )}
         </main>
     );
 }

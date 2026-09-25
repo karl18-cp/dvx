@@ -14,7 +14,7 @@ class RestrictTraineeAccess
             $user = $user->fresh();
         }
         if ($user && ($user->role === 'trainee' || $user->training_status === 'rejected')) {
-            if ($request->is('logout')) {
+            if ($request->is('/', 'logout')) {
                 return $next($request);
             }
             abort_unless($user->status === 'active' && $user->training_status === 'in_training', 403, 'Your training access has ended. Please contact your administrator.');

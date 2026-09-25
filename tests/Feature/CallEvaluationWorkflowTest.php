@@ -255,6 +255,35 @@ class CallEvaluationWorkflowTest extends TestCase
         $this->actingAs($manager)->getJson(route('coaching.manage.export', $record))->assertOk()->assertJsonCount(1, 'attachments')->assertJsonCount(1, 'warnings');
     }
 
+    public function test_picker_includes_unassigned_agents_and_leaders_without_member_records(): void
+    {
+        [$manager, , $campaign] = $this->context();
+        $leader = User::factory()->create(['role' => 'team_leader', 'status' => 'active']);
+        $unassigned = User::factory()->create(['role' => 'agent', 'status' => 'active']);
+        $team = Team::query()->create(['name' => 'Leader Team', 'campaign_id' => $campaign->id]);
+        $leader->ledTeamAssignments()->create(['team_id' => $team->id]);
+        $this->actingAs($manager)->get(route('quality.evaluations.index'))->assertInertia(fn (Assert $page) => $page
+            ->has('employees', 3)
+            ->where('employees', fn ($employees) => collect($employees)->contains(fn ($employee) => $employee['id'] === $leader->id && $employee['evaluation_teams'][0]['id'] === $team->id)
+                && collect($employees)->contains(fn ($employee) => $employee['id'] === $unassigned->id && count($employee['evaluation_teams']) === 0)));
+    }
+
+    public function test_leader_evaluation_requires_an_assigned_team_and_rejects_forged_team(): void
+    {
+        [$manager, , $campaign, $card] = $this->context();
+        $leader = User::factory()->create(['role' => 'team_leader', 'status' => 'active']);
+        $first = Team::query()->create(['name' => 'First', 'campaign_id' => $campaign->id]);
+        $second = Team::query()->create(['name' => 'Second', 'campaign_id' => $campaign->id]);
+        $leader->ledTeamAssignments()->createMany([['team_id' => $first->id], ['team_id' => $second->id]]);
+        $data = ['employee_id' => $leader->id, 'scorecard_id' => $card->id, 'call_at' => now(), 'call_direction' => 'inbound'];
+        $this->actingAs($manager)->post(route('quality.evaluations.store'), $data)->assertSessionHasErrors('team_id');
+        $foreign = Team::query()->where('name', 'Test Team')->firstOrFail();
+        $this->post(route('quality.evaluations.store'), [...$data, 'team_id' => $foreign->id])->assertSessionHasErrors('team_id');
+        $this->assertDatabaseCount('call_evaluations', 0);
+        $this->post(route('quality.evaluations.store'), [...$data, 'team_id' => $second->id])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('call_evaluations', ['employee_id' => $leader->id, 'team_id' => $second->id, 'campaign_id' => $campaign->id]);
+    }
+
     private function context(): array
     {
         $manager = User::factory()->create(['role' => 'manager']);

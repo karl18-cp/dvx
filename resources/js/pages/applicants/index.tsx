@@ -10,7 +10,11 @@ import {
 import { X } from 'lucide-react';
 import { useState } from 'react';
 
+import { CustomAnswers } from '@/components/public-form-fields';
+import type { Answer } from '@/components/public-form-fields';
+
 type Application = {
+    custom_answers?: Answer[];
     id: number;
     first_name: string;
     last_name: string;
@@ -340,6 +344,9 @@ export default function Applicants({
                                             {selected.message}
                                         </p>
                                     )}
+                                    <CustomAnswers
+                                        answers={selected.custom_answers}
+                                    />
                                     {selected.resume_path && (
                                         <a
                                             className="mt-3 inline-block font-bold text-red-700"

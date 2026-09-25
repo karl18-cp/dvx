@@ -291,7 +291,7 @@ class EmployeeAssessmentController extends Controller
 
     private function ownAttempt(Request $request, AssessmentAttempt $attempt): void
     {
-        abort_unless($attempt->employee_id === $request->user()->id || in_array($request->user()->role, ['admin', 'manager'], true), 403);
+        abort_unless($attempt->employee_id === $request->user()->id || in_array($request->user()->role, ['admin', 'manager', 'qa_admin'], true), 403);
         $attempt->loadMissing('assessment');
     }
 

@@ -10,7 +10,7 @@ class EnsureQaViewer
 {
     public function handle(Request $request, Closure $next): Response
     {
-        abort_unless(in_array($request->user()?->role, ['admin', 'manager', 'team_leader'], true), 403);
+        abort_unless(in_array($request->user()?->role, ['admin', 'manager', 'qa_admin', 'team_leader'], true), 403);
 
         return $next($request);
     }

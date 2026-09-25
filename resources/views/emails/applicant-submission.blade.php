@@ -12,4 +12,7 @@
 <p>{{ $application->resume_path ? 'The applicant’s résumé is attached.' : 'The applicant did not attach a résumé.' }}</p>
 <p>Application #{{ $application->id }} is saved in Divertex. Sign in and open Management → Applicants to review it and change its status.</p>
 <p>Reply to this email to contact the applicant.</p>
+@foreach ($application->custom_answers ?? [] as $answer)
+<p><strong>{{ $answer['label'] }}:</strong> {{ is_bool($answer['value']) ? ($answer['value'] ? 'Yes' : 'No') : ($answer['value'] ?? 'Not provided') }}</p>
+@endforeach
 </body></html>

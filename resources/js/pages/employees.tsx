@@ -113,6 +113,7 @@ type FaceDetectionStatus =
 const positions = [
     'Admin',
     'Manager',
+    'QA Assessment Admin',
     'Team Leader',
     'Agent',
     'Trainee',

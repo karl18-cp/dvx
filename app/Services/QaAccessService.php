@@ -9,7 +9,7 @@ class QaAccessService
 {
     public function teamIds(User $user): array
     {
-        if (in_array($user->role, ['admin', 'manager'], true)) {
+        if (in_array($user->role, ['admin', 'manager', 'qa_admin'], true)) {
             return [];
         }
 

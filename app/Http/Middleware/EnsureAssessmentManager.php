@@ -10,7 +10,7 @@ class EnsureAssessmentManager
 {
     public function handle(Request $request, Closure $next): Response
     {
-        abort_unless(in_array($request->user()?->role, ['admin', 'manager'], true), 403);
+        abort_unless(in_array($request->user()?->role, ['admin', 'manager', 'qa_admin'], true), 403);
 
         return $next($request);
     }

@@ -15,18 +15,19 @@ class JobApplicationController extends Controller
 {
     public function store(Request $request, \App\Services\RecruitmentEmailService $email): RedirectResponse
     {
-        $data = $request->validate([
+        $data = app(\App\Services\PublicFormService::class)->submission($request, 'application', [
             'first_name' => ['required', 'string', 'max:100'], 'last_name' => ['required', 'string', 'max:100'],
             'email' => ['required', 'email:rfc', 'max:255'], 'phone' => ['required', 'string', 'max:40'],
             'position' => ['required', Rule::in(['Customer Service Representative', 'Other'])],
             'location' => ['nullable', 'string', 'max:150'], 'years_experience' => ['required', 'integer', 'min:0', 'max:50'],
             'message' => ['nullable', 'string', 'max:3000'], 'resume' => ['nullable', 'file', 'max:5120', 'mimes:pdf,doc,docx', 'mimetypes:application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
         ]);
+        $resume = $data['resume'] ?? null;
         unset($data['resume']);
         $digits = preg_replace('/\D+/', '', $data['phone']) ?: '';
         $data['phone_normalized'] = strlen($digits) > 10 ? substr($digits, -10) : $digits;
-        if ($request->hasFile('resume')) {
-            $file = $request->file('resume');
+        if ($resume) {
+            $file = $resume;
             $path = $file->store('job-applications/'.now()->format('Y/m'), 'local');
             $data = [...$data, 'resume_disk' => 'local', 'resume_path' => $path, 'resume_original_name' => $file->getClientOriginalName(), 'resume_mime' => $file->getMimeType(), 'resume_size' => $file->getSize()];
         }

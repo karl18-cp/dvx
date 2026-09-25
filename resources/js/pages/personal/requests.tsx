@@ -8,6 +8,7 @@ import {
     DialogTitle,
     IconButton,
     MenuItem,
+    Stack,
     TextField,
 } from '@mui/material';
 import { Plus, X } from 'lucide-react';
@@ -169,6 +170,15 @@ export default function MyRequests({
                 fullWidth
                 maxWidth="sm"
                 aria-labelledby="time-request-title"
+                slotProps={{
+                    paper: {
+                        sx: {
+                            m: { xs: 2, sm: 4 },
+                            width: { xs: 'calc(100% - 32px)', sm: '100%' },
+                            maxHeight: 'calc(100dvh - 32px)',
+                        },
+                    },
+                }}
             >
                 <DialogTitle
                     id="time-request-title"
@@ -184,6 +194,12 @@ export default function MyRequests({
                     </IconButton>
                 </DialogTitle>
                 <form
+                    style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        minHeight: 0,
+                        overflow: 'hidden',
+                    }}
                     onSubmit={(event) => {
                         event.preventDefault();
                         form.post('/my-requests', {
@@ -192,8 +208,11 @@ export default function MyRequests({
                         });
                     }}
                 >
-                    <DialogContent dividers>
-                        <div className="space-y-5">
+                    <DialogContent
+                        dividers
+                        sx={{ px: { xs: 2, sm: 3 }, py: 3 }}
+                    >
+                        <Stack spacing={3} useFlexGap>
                             <TextField
                                 select
                                 fullWidth
@@ -262,9 +281,11 @@ export default function MyRequests({
                                 helperText={form.errors.reason}
                                 slotProps={{ htmlInput: { maxLength: 2000 } }}
                             />
-                        </div>
+                        </Stack>
                     </DialogContent>
-                    <DialogActions sx={{ p: 3 }}>
+                    <DialogActions
+                        sx={{ px: { xs: 2, sm: 3 }, py: 2, flexShrink: 0 }}
+                    >
                         <Button
                             type="submit"
                             variant="contained"

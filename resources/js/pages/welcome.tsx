@@ -1,6 +1,10 @@
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import {
     ArrowRight,
+    BarChart3,
+    Code2,
+    BriefcaseBusiness,
+    Megaphone,
     CheckCircle2,
     Headphones,
     ShieldCheck,
@@ -8,10 +12,19 @@ import {
     Users,
 } from 'lucide-react';
 import { useState } from 'react';
+import BusinessInquiryDialog from '@/components/business-inquiry-dialog';
+import { PublicFormFields } from '@/components/public-form-fields';
+import type { PublicFormDefinition } from '@/components/public-form-fields';
 
-const positions = ['Customer Service Representative', 'Other'];
-
-export default function Welcome() {
+export default function Welcome({
+    publicForms,
+}: {
+    publicForms: {
+        application: PublicFormDefinition;
+        business: PublicFormDefinition;
+    };
+}) {
+    const [inquiryOpen, setInquiryOpen] = useState(false);
     const { auth } = usePage().props;
     const form = useForm({
         first_name: '',
@@ -23,6 +36,7 @@ export default function Welcome() {
         years_experience: '0',
         message: '',
         resume: null as File | null,
+        custom_fields: {} as Record<string, string | boolean>,
     });
     const [applicationSubmitted, setApplicationSubmitted] = useState(false);
     const submit = (event: React.FormEvent) => {
@@ -102,35 +116,43 @@ export default function Welcome() {
 
     return (
         <div className="min-h-screen bg-[#f6f6f8] font-sans text-[#161522]">
-            <Head title="Divertex — People. Performance. Possibility." />
+            <Head title="Divertex — Outsourcing, Digital Operations & Careers">
+                <meta
+                    name="description"
+                    content="Explore Divertex outsourcing and digital services, discuss a business partnership, or apply to join our team."
+                />
+            </Head>
             <header className="sticky top-0 z-30 border-b border-white/10 bg-[#0d0b12]/95 text-white backdrop-blur">
-                <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
+                <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4 lg:px-8">
                     <a href="#top" className="flex items-center gap-3">
-                        <span className="rounded-full border-2 border-red-500 bg-[#8f171d] px-5 py-2 text-sm font-black italic">
-                            DIVERTEX
-                        </span>
+                        <img
+                            src="/images/divertex-logo.png"
+                            alt="Divertex"
+                            className="h-14 w-28 object-contain sm:h-16 sm:w-32"
+                        />
                         <span className="hidden text-xs font-semibold tracking-[.24em] text-white/60 sm:inline">
                             CORPORATION
                         </span>
                     </a>
-                    <nav className="hidden items-center gap-7 text-sm font-semibold md:flex">
+                    <nav className="hidden items-center gap-7 text-sm font-semibold xl:flex">
                         <a href="#about">About</a>
-                        <a href="#services">What We Do</a>
+                        <a href="#services">Services</a>
+                        <a href="#contact">Partner With Us</a>
                         <a href="#careers">Careers</a>
                         <a href="/applicant-portal">Applicant Portal</a>
                     </nav>
-                    <div className="flex gap-2">
+                    <div className="flex items-start gap-2">
                         {auth.user ? (
                             <Link
                                 href="/dashboard"
-                                className="rounded-lg border border-white/30 px-4 py-2 text-sm font-bold"
+                                className="inline-flex h-11 shrink-0 items-center justify-center rounded-lg border border-white/30 px-4 text-sm font-bold whitespace-nowrap transition hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
                             >
                                 Dashboard
                             </Link>
                         ) : (
                             <Link
                                 href="/login"
-                                className="rounded-lg border border-white/30 px-4 py-2 text-sm font-bold"
+                                className="inline-flex h-11 shrink-0 items-center justify-center rounded-lg border border-white/30 px-4 text-sm font-bold whitespace-nowrap transition hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
                             >
                                 Employee Login
                             </Link>
@@ -138,7 +160,7 @@ export default function Welcome() {
                         <div className="flex flex-col gap-1.5">
                             <a
                                 href="#apply"
-                                className="rounded-lg bg-[#c4262d] px-4 py-2 text-center text-sm font-bold"
+                                className="inline-flex h-11 items-center justify-center rounded-lg bg-[#c4262d] px-4 text-center text-sm font-bold whitespace-nowrap transition hover:bg-[#a51f26]"
                             >
                                 Apply Now
                             </a>
@@ -184,46 +206,51 @@ export default function Welcome() {
                                 </div>
                             )}
                             <p className="mb-5 text-xs font-bold tracking-[.3em] text-red-400 uppercase">
-                                Build better customer experiences
+                                Your business. Our people. Shared growth.
                             </p>
                             <h1 className="max-w-3xl text-5xl leading-[1.05] font-black tracking-tight sm:text-6xl lg:text-7xl">
-                                People-first service.
+                                Build your team.
                                 <br />
                                 <span className="text-red-500">
                                     Performance that matters.
                                 </span>
                             </h1>
                             <p className="mt-7 max-w-2xl text-lg leading-8 text-white/65">
-                                Divertex brings talented people, focused
-                                training, and dependable operations together to
-                                help teams deliver excellent customer
-                                experiences.
+                                Outsourcing and digital support for businesses
+                                ready to grow. Find the people and services that
+                                fit your next stage.
                             </p>
                             <div className="mt-9 flex flex-wrap gap-3">
                                 <a
-                                    href="#apply"
+                                    href="#contact"
                                     className="flex items-center gap-2 rounded-xl bg-[#c4262d] px-6 py-4 font-bold"
                                 >
-                                    Start your application{' '}
-                                    <ArrowRight size={18} />
+                                    Let’s talk business <ArrowRight size={18} />
                                 </a>
                                 <a
-                                    href="#about"
+                                    href="#services"
                                     className="rounded-xl border border-white/20 px-6 py-4 font-bold"
                                 >
-                                    Discover Divertex
+                                    Explore our services
                                 </a>
                             </div>
+                            <a
+                                href="#apply"
+                                className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-white/80 underline underline-offset-4 hover:text-white"
+                            >
+                                Looking for a career? Apply here{' '}
+                                <ArrowRight size={16} />
+                            </a>
                         </div>
                         <div className="grid gap-4">
                             <div className="rounded-3xl border border-white/10 bg-white/5 p-7 backdrop-blur">
                                 <Sparkles className="text-red-400" />
                                 <p className="mt-10 text-3xl font-black">
-                                    Grow with a team that invests in you.
+                                    A partner for your next stage of growth.
                                 </p>
                                 <p className="mt-3 text-white/60">
-                                    Clear expectations, purposeful coaching, and
-                                    opportunities to develop.
+                                    Dedicated talent, hands-on team leadership,
+                                    and a focus on lasting client relationships.
                                 </p>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
@@ -246,21 +273,20 @@ export default function Welcome() {
                                 Who we are
                             </p>
                             <h2 className="mt-4 text-4xl font-black">
-                                A workplace built for service, learning, and
-                                meaningful growth.
+                                Strong partnerships start with people.
                             </h2>
                         </div>
                         <div className="space-y-4 leading-7 text-slate-600">
                             <p>
-                                Our teams support customer conversations with
-                                professionalism, empathy, and consistent
-                                standards.
+                                Based in Palico, Tuy, Batangas, Divertex
+                                connects businesses with dedicated talent and
+                                meaningful career opportunities close to home.
                             </p>
                             <p>
-                                We combine structured onboarding, ongoing
-                                training, quality assurance, and coaching so
-                                employees understand how to succeed and where
-                                they can grow.
+                                Our community-based approach brings continuity
+                                to your operations. We invest in training and
+                                long-term relationships so our people can grow
+                                alongside your business.
                             </p>
                         </div>
                     </div>
@@ -268,28 +294,175 @@ export default function Welcome() {
                 <section id="services" className="bg-white py-24">
                     <div className="mx-auto max-w-7xl px-5 lg:px-8">
                         <p className="text-xs font-bold tracking-[.25em] text-red-700 uppercase">
-                            What we value
+                            Services for your business
                         </p>
                         <h2 className="mt-3 max-w-2xl text-4xl font-black">
-                            Professional service backed by strong people
-                            systems.
+                            The right support for the work ahead.
                         </h2>
                         <div className="mt-10 grid gap-5 md:grid-cols-3">
                             <Value
                                 icon={<Headphones />}
-                                title="Customer Focus"
-                                text="Thoughtful conversations that respect every customer's time and needs."
+                                title="Customer Support"
+                                text="Help customers across channels, manage inquiries, and handle escalations with care."
                             />
                             <Value
-                                icon={<Users />}
-                                title="People Development"
-                                text="Training, feedback, and coaching designed to build confidence and capability."
+                                icon={<Code2 />}
+                                title="Development Teams"
+                                text="Technical talent for software and digital projects."
                             />
                             <Value
                                 icon={<ShieldCheck />}
-                                title="Quality & Accountability"
-                                text="Clear standards, fair evaluation, and dependable follow-through."
+                                title="Quality Assurance"
+                                text="Dedicated support for testing and quality checks."
                             />
+                            <Value
+                                icon={<BriefcaseBusiness />}
+                                title="Virtual Assistance"
+                                text="Administrative and executive support for everyday business needs."
+                            />
+                            <Value
+                                icon={<Megaphone />}
+                                title="Digital Marketing"
+                                text="Support for content, search visibility, and social media."
+                            />
+                            <Value
+                                icon={<BarChart3 />}
+                                title="Data & Analytics"
+                                text="Specialists to help turn business data into useful insights."
+                            />
+                        </div>
+                    </div>
+                </section>
+                <section
+                    id="why-divertex"
+                    className="mx-auto max-w-7xl px-5 py-20 lg:px-8"
+                >
+                    <p className="text-xs font-bold tracking-[.25em] text-red-700 uppercase">
+                        Why Divertex
+                    </p>
+                    <h2 className="mt-3 text-4xl font-black">
+                        People you can work with. Operations you can follow.
+                    </h2>
+                    <div className="mt-9 grid gap-5 md:grid-cols-3">
+                        <Value
+                            icon={<Users />}
+                            title="Office-based teams"
+                            text="An organized workplace with leaders close to daily operations."
+                        />
+                        <Value
+                            icon={<ShieldCheck />}
+                            title="Visible performance"
+                            text="Regular reporting, coaching, and quality reviews."
+                        />
+                        <Value
+                            icon={<BarChart3 />}
+                            title="Room to grow"
+                            text="Adjust team size and service scope as your needs change."
+                        />
+                    </div>
+                    <div className="mt-10 rounded-2xl border border-red-100 bg-red-50/60 p-6">
+                        <h3 className="text-lg font-bold">
+                            Support across industries
+                        </h3>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                            {[
+                                'E-commerce',
+                                'Healthcare',
+                                'Real Estate',
+                                'Hospitality',
+                                'Logistics',
+                                'Professional Services',
+                                'Startups & SMEs',
+                            ].map((industry) => (
+                                <span
+                                    key={industry}
+                                    className="rounded-full border border-red-100 bg-white px-4 py-2 text-sm text-slate-700"
+                                >
+                                    {industry}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+                <section
+                    id="contact"
+                    className="scroll-mt-32 bg-[#100d16] py-20 text-white"
+                >
+                    <div className="mx-auto grid max-w-7xl gap-10 px-5 lg:grid-cols-2 lg:px-8">
+                        <div>
+                            <p className="text-xs font-bold tracking-[.25em] text-red-300 uppercase">
+                                Business inquiries & partnerships
+                            </p>
+                            <h2 className="mt-4 text-4xl font-black">
+                                Tell us what your business needs next.
+                            </h2>
+                            <p className="mt-5 max-w-xl leading-7 text-white/70">
+                                Looking for customer support, a digital team, or
+                                help with daily operations? Share your goals,
+                                the roles you need, and your preferred timeline.
+                                Let’s discuss a setup that fits your business.
+                            </p>
+                            <div className="mt-7 flex flex-wrap gap-3">
+                                <a
+                                    href="mailto:divertexcorp@gmail.com?subject=Divertex%20business%20inquiry"
+                                    className="inline-flex items-center gap-2 rounded-xl bg-[#c4262d] px-6 py-4 font-bold hover:bg-[#a51f26]"
+                                >
+                                    Email our team <ArrowRight size={18} />
+                                </a>
+                                <button
+                                    type="button"
+                                    onClick={() => setInquiryOpen(true)}
+                                    className="rounded-xl border border-white/30 px-6 py-4 font-bold hover:bg-white/10"
+                                >
+                                    Send a business inquiry
+                                </button>
+                            </div>
+                            <p className="mt-5 text-sm text-white/65">
+                                Palico, Tuy, Batangas ·{' '}
+                                <a
+                                    className="break-all underline underline-offset-4"
+                                    href="mailto:divertexcorp@gmail.com"
+                                >
+                                    divertexcorp@gmail.com
+                                </a>
+                            </p>
+                        </div>
+                        <div className="rounded-3xl border border-white/10 bg-white/5 p-7">
+                            <h3 className="text-xl font-bold">
+                                From a conversation to a working team
+                            </h3>
+                            <ol className="mt-6 space-y-5">
+                                {[
+                                    [
+                                        'Discuss your needs',
+                                        'Define the roles and support you need.',
+                                    ],
+                                    [
+                                        'Choose your team',
+                                        'Review candidates and agree on the fit.',
+                                    ],
+                                    [
+                                        'Get started',
+                                        'Prepare training, tools, and workflows.',
+                                    ],
+                                    [
+                                        'Keep improving',
+                                        'Review performance and plan your next steps.',
+                                    ],
+                                ].map(([title, description], index) => (
+                                    <li key={title} className="flex gap-4">
+                                        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-red-500/20 font-bold text-red-200">
+                                            {index + 1}
+                                        </span>
+                                        <div>
+                                            <p className="font-bold">{title}</p>
+                                            <p className="mt-1 text-sm text-white/65">
+                                                {description}
+                                            </p>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ol>
                         </div>
                     </div>
                 </section>
@@ -475,136 +648,34 @@ export default function Welcome() {
                             onSubmit={submit}
                             className="grid gap-4 rounded-3xl bg-white p-6 text-slate-900 sm:grid-cols-2 sm:p-9"
                         >
-                            <Input
-                                label="First Name"
-                                error={form.errors.first_name}
-                            >
-                                <input
-                                    required
-                                    value={form.data.first_name}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'first_name',
-                                            e.target.value,
-                                        )
-                                    }
+                            <div className="space-y-5 sm:col-span-2">
+                                <h3 className="text-xl font-bold">
+                                    {publicForms.application.title}
+                                </h3>
+                                <p className="text-sm text-slate-500">
+                                    {publicForms.application.description}
+                                </p>
+                                <PublicFormFields
+                                    fields={publicForms.application.fields}
+                                    values={form.data}
+                                    customValues={form.data.custom_fields}
+                                    errors={form.errors}
+                                    columns={2}
+                                    onChange={(id, value, custom) => {
+                                        if (custom) {
+                                            form.setData('custom_fields', {
+                                                ...form.data.custom_fields,
+                                                [id]: value as string | boolean,
+                                            });
+                                        } else {
+                                            form.setData({
+                                                ...form.data,
+                                                [id]: value,
+                                            });
+                                        }
+                                    }}
                                 />
-                            </Input>
-                            <Input
-                                label="Last Name"
-                                error={form.errors.last_name}
-                            >
-                                <input
-                                    required
-                                    value={form.data.last_name}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'last_name',
-                                            e.target.value,
-                                        )
-                                    }
-                                />
-                            </Input>
-                            <Input
-                                label="Email Address"
-                                error={form.errors.email}
-                            >
-                                <input
-                                    type="email"
-                                    required
-                                    value={form.data.email}
-                                    onChange={(e) =>
-                                        form.setData('email', e.target.value)
-                                    }
-                                />
-                            </Input>
-                            <Input
-                                label="Mobile Number"
-                                error={form.errors.phone}
-                            >
-                                <input
-                                    required
-                                    value={form.data.phone}
-                                    onChange={(e) =>
-                                        form.setData('phone', e.target.value)
-                                    }
-                                />
-                            </Input>
-                            <Input
-                                label="Position"
-                                error={form.errors.position}
-                            >
-                                <select
-                                    required
-                                    value={form.data.position}
-                                    onChange={(e) =>
-                                        form.setData('position', e.target.value)
-                                    }
-                                >
-                                    <option value="">Select a position</option>
-                                    {positions.map((p) => (
-                                        <option key={p}>{p}</option>
-                                    ))}
-                                </select>
-                            </Input>
-                            <Input
-                                label="Current City / Province"
-                                error={form.errors.location}
-                            >
-                                <input
-                                    value={form.data.location}
-                                    onChange={(e) =>
-                                        form.setData('location', e.target.value)
-                                    }
-                                />
-                            </Input>
-                            <Input
-                                label="Years of Relevant Experience"
-                                error={form.errors.years_experience}
-                            >
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max="50"
-                                    required
-                                    value={form.data.years_experience}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'years_experience',
-                                            e.target.value,
-                                        )
-                                    }
-                                />
-                            </Input>
-                            <Input
-                                label="Résumé (PDF, DOC, DOCX — max 5 MB)"
-                                error={form.errors.resume}
-                            >
-                                <input
-                                    type="file"
-                                    accept=".pdf,.doc,.docx"
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'resume',
-                                            e.target.files?.[0] || null,
-                                        )
-                                    }
-                                />
-                            </Input>
-                            <Input
-                                label="Short Introduction / Relevant Experience"
-                                error={form.errors.message}
-                                wide
-                            >
-                                <textarea
-                                    rows={4}
-                                    value={form.data.message}
-                                    onChange={(e) =>
-                                        form.setData('message', e.target.value)
-                                    }
-                                    placeholder="Tell us why you are interested and what experience you would bring."
-                                />
-                            </Input>
+                            </div>
                             <div className="flex items-center justify-between gap-4 sm:col-span-2">
                                 <p className="text-xs text-slate-500">
                                     By submitting, you confirm that your
@@ -616,16 +687,43 @@ export default function Welcome() {
                                 >
                                     {form.processing
                                         ? 'Submitting…'
-                                        : 'Submit Application'}
+                                        : publicForms.application.submit_label}
                                 </button>
                             </div>
                         </form>
                     </div>
                 </section>
             </main>
+            {inquiryOpen && (
+                <BusinessInquiryDialog
+                    definition={publicForms.business}
+                    onClose={() => setInquiryOpen(false)}
+                />
+            )}
             <footer className="border-t border-white/10 bg-[#100d16] px-5 py-8 text-center text-sm text-white/45">
-                © {new Date().getFullYear()} Divertex Corporation. Temporary
-                recruitment landing page.
+                <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-5 text-left">
+                    <p>
+                        © {new Date().getFullYear()} Divertex Corporation. All
+                        rights reserved.
+                    </p>
+                    <div className="flex flex-wrap gap-5">
+                        <a href="#services" className="hover:text-white">
+                            Services
+                        </a>
+                        <a href="#contact" className="hover:text-white">
+                            Business inquiries
+                        </a>
+                        <a href="#apply" className="hover:text-white">
+                            Apply for a role
+                        </a>
+                        <a
+                            href="/applicant-portal"
+                            className="hover:text-white"
+                        >
+                            Application status
+                        </a>
+                    </div>
+                </div>
             </footer>
         </div>
     );

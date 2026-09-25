@@ -108,7 +108,17 @@ const managementItems: MenuItem[] = [
     },
     { label: 'Employees', icon: Users, href: '/employees' },
     { label: 'Trainees', icon: Users, href: '/trainees' },
+    {
+        label: 'Business Inquiries',
+        icon: MessagesSquare,
+        href: '/business-inquiries',
+    },
     { label: 'Team Assigning', icon: UserRoundPlus, href: '/team-assigning' },
+    {
+        label: 'Form Settings',
+        icon: ClipboardList,
+        href: '/public-form-settings',
+    },
     { label: 'Team', icon: UsersRound, href: '/teams' },
     { label: 'Campaign', icon: Megaphone, href: '/campaigns' },
     { label: 'Sanctions', icon: Gavel, href: '/sanctions' },
@@ -312,8 +322,9 @@ export function AppSidebar() {
     const [managementOpen, setManagementOpen] = useState(true);
     const [trainingOpen, setTrainingOpen] = useState(true);
     const [qualityOpen, setQualityOpen] = useState(true);
+    const isQaAdmin = auth.user.role === 'qa_admin';
     const isManager =
-        auth.user.role === 'admin' || auth.user.role === 'manager';
+        isQaAdmin || auth.user.role === 'admin' || auth.user.role === 'manager';
     const isQaViewer = isManager || auth.user.role === 'team_leader';
 
     return (
@@ -394,11 +405,13 @@ export function AppSidebar() {
                             }
                         />
                     )}
-                    {(auth.user.role === 'trainee'
-                        ? traineeItems
-                        : auth.user.role === 'agent'
-                          ? agentItems
-                          : primaryItems
+                    {(isQaAdmin
+                        ? []
+                        : auth.user.role === 'trainee'
+                          ? traineeItems
+                          : auth.user.role === 'agent'
+                            ? agentItems
+                            : primaryItems
                     )
                         .filter(
                             (item) =>
@@ -446,30 +459,34 @@ export function AppSidebar() {
 
                     {isManager && (
                         <>
-                            <SidebarGroup
-                                label="Management"
-                                icon={Layers3}
-                                items={managementItems.filter(
-                                    (item) =>
-                                        ![
-                                            '/trainees',
-                                            '/sanctions',
-                                            '/forms',
-                                            '/satisfaction-results',
-                                        ].includes(item.href ?? '') ||
-                                        auth.user.role === 'admin',
-                                )}
-                                open={managementOpen}
-                                onToggle={() =>
-                                    setManagementOpen((value) => !value)
-                                }
-                                currentUrl={
-                                    (
-                                        page.props.navigation?.currentPath ??
-                                        page.url
-                                    ).split('?')[0]
-                                }
-                            />
+                            {!isQaAdmin && (
+                                <SidebarGroup
+                                    label="Management"
+                                    icon={Layers3}
+                                    items={managementItems.filter(
+                                        (item) =>
+                                            ![
+                                                '/trainees',
+                                                '/business-inquiries',
+                                                '/public-form-settings',
+                                                '/sanctions',
+                                                '/forms',
+                                                '/satisfaction-results',
+                                            ].includes(item.href ?? '') ||
+                                            auth.user.role === 'admin',
+                                    )}
+                                    open={managementOpen}
+                                    onToggle={() =>
+                                        setManagementOpen((value) => !value)
+                                    }
+                                    currentUrl={
+                                        (
+                                            page.props.navigation
+                                                ?.currentPath ?? page.url
+                                        ).split('?')[0]
+                                    }
+                                />
+                            )}
                             <SidebarGroup
                                 label="Training & Development"
                                 icon={BookOpenCheck}
@@ -522,7 +539,9 @@ export function AppSidebar() {
                     )}
 
                     <div className="pt-2">
-                        {!['agent', 'trainee'].includes(auth.user.role) && (
+                        {!['agent', 'trainee', 'qa_admin'].includes(
+                            auth.user.role,
+                        ) && (
                             <SidebarItem
                                 item={{ label: 'Payroll', icon: ReceiptText }}
                                 currentUrl={
@@ -574,7 +593,9 @@ export function AppSidebar() {
                             {auth.user.name}
                         </p>
                         <p className="text-xs text-white/65 capitalize">
-                            {auth.user.role.replaceAll('_', ' ')}
+                            {isQaAdmin
+                                ? 'QA Assessment Admin'
+                                : auth.user.role.replaceAll('_', ' ')}
                         </p>
                     </div>
                 </div>

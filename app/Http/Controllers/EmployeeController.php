@@ -175,6 +175,7 @@ class EmployeeController extends Controller
             'agent' => 'Agent',
             'it_admin' => 'IT Admin',
             'it_support' => 'IT Support',
+            'qa_admin' => 'QA Assessment Admin',
             'it_developer' => 'IT Developer',
             default => ucwords(str_replace('_', ' ', $role)),
         };

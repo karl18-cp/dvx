@@ -1,28 +1,42 @@
-import { Head, Link, useForm } from '@inertiajs/react';
+import { router, useForm } from '@inertiajs/react';
+import {
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    IconButton,
+} from '@mui/material';
+import { X } from 'lucide-react';
 import { DateTimeField } from '@/components/date-time-field';
-type Scorecard = {
+export type Scorecard = {
     id: number;
     name: string;
     applies_to_all_campaigns: boolean;
     campaigns: { id: number; name: string }[];
 };
-type Employee = {
+export type Employee = {
     id: number;
     name: string;
     username: string;
-    team_membership: {
-        team: { name: string; campaign: { id: number; name: string } };
-    };
+    evaluation_teams: {
+        id: number;
+        name: string;
+        campaign: { id: number; name: string };
+    }[];
 };
 export default function Create({
     employees,
     scorecards,
+    onClose,
 }: {
     employees: Employee[];
     scorecards: Scorecard[];
+    onClose?: () => void;
 }) {
     const form = useForm({
         employee_id: '',
+        team_id: '',
         scorecard_id: '',
         call_at: new Date().toISOString().slice(0, 16),
         call_direction: 'inbound',
@@ -33,27 +47,34 @@ export default function Create({
     const employee = employees.find(
         (e) => String(e.id) === String(form.data.employee_id),
     );
-    const compatibleScorecards = (selectedEmployee?: Employee) =>
-        scorecards.filter(
-            (scorecard) =>
-                !selectedEmployee ||
-                scorecard.applies_to_all_campaigns ||
-                scorecard.campaigns.some(
-                    (campaign) =>
-                        campaign.id ===
-                        selectedEmployee.team_membership.team.campaign.id,
-                ),
-        );
-    const eligible = compatibleScorecards(employee);
+    const team = employee?.evaluation_teams.find(
+        (item) => String(item.id) === form.data.team_id,
+    );
+    const compatibleScorecards = (campaignId?: number) =>
+        campaignId
+            ? scorecards.filter(
+                  (scorecard) =>
+                      scorecard.applies_to_all_campaigns ||
+                      scorecard.campaigns.some(
+                          (campaign) => campaign.id === campaignId,
+                      ),
+              )
+            : [];
+    const eligible = compatibleScorecards(team?.campaign.id);
     const selectEmployee = (employeeId: string) => {
         const selectedEmployee = employees.find(
             (item) => String(item.id) === employeeId,
         );
-        const matches = compatibleScorecards(selectedEmployee);
+        const selectedTeam =
+            selectedEmployee?.evaluation_teams.length === 1
+                ? selectedEmployee.evaluation_teams[0]
+                : undefined;
+        const matches = compatibleScorecards(selectedTeam?.campaign.id);
 
         form.setData({
             ...form.data,
             employee_id: employeeId,
+            team_id: selectedTeam ? String(selectedTeam.id) : '',
             scorecard_id: matches.length === 1 ? String(matches[0].id) : '',
         });
     };
@@ -63,23 +84,72 @@ export default function Create({
     };
 
     return (
-        <main className="assessment-admin min-h-full bg-[#f7f7fa] p-6 text-slate-900">
-            <Head title="New Call Evaluation" />
-            <form onSubmit={submit} className="mx-auto max-w-3xl space-y-5">
-                <header>
-                    <Link
-                        className="font-bold text-red-700"
-                        href="/management/call-evaluations"
-                    >
-                        ← Call Evaluations
-                    </Link>
-                    <h1 className="mt-3">New Evaluation</h1>
-                    <p>
-                        Select the employee first; Campaign and Team are
-                        resolved automatically.
+        <Dialog
+            open
+            fullWidth
+            maxWidth="md"
+            aria-labelledby="new-evaluation-title"
+            onClose={() => {
+                if (!form.processing) {
+                    if (onClose) onClose();
+                    else router.get('/management/call-evaluations');
+                }
+            }}
+            slotProps={{
+                paper: {
+                    sx: {
+                        m: 2,
+                        width: 'calc(100% - 32px)',
+                        maxHeight: 'calc(100dvh - 32px)',
+                    },
+                },
+            }}
+        >
+            <DialogTitle
+                id="new-evaluation-title"
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                }}
+            >
+                New Evaluation
+                <IconButton
+                    aria-label="Close evaluation"
+                    disabled={form.processing}
+                    onClick={() => {
+                        if (onClose) onClose();
+                        else router.get('/management/call-evaluations');
+                    }}
+                >
+                    <X />
+                </IconButton>
+            </DialogTitle>
+            <form
+                onSubmit={submit}
+                style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    minHeight: 0,
+                    overflow: 'hidden',
+                }}
+            >
+                <DialogContent
+                    dividers
+                    className="assessment-admin"
+                    sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 3,
+                        px: { xs: 2, sm: 3 },
+                        py: 3,
+                        '& > *': { flexShrink: 0 },
+                    }}
+                >
+                    <p className="text-sm text-slate-500">
+                        Select an employee to load their campaign, team, and
+                        available scorecards.
                     </p>
-                </header>
-                <section className="space-y-4 rounded-2xl border bg-white p-6">
                     <Field label="Employee">
                         <select
                             value={form.data.employee_id}
@@ -94,22 +164,56 @@ export default function Create({
                             ))}
                         </select>
                     </Field>
-                    {employee && (
+                    {employee && employee.evaluation_teams.length === 0 && (
+                        <p role="alert" className="text-sm text-red-700">
+                            This employee has no campaign team assigned. Assign
+                            an agent through Team Assigning, or assign a team
+                            leader to a team, before creating an evaluation.
+                        </p>
+                    )}
+                    {employee && employee.evaluation_teams.length > 1 && (
+                        <Field label="Evaluation team">
+                            <select
+                                required
+                                value={form.data.team_id}
+                                onChange={(event) => {
+                                    const selected =
+                                        employee.evaluation_teams.find(
+                                            (item) =>
+                                                String(item.id) ===
+                                                event.target.value,
+                                        );
+                                    const matches = compatibleScorecards(
+                                        selected?.campaign.id,
+                                    );
+                                    form.setData({
+                                        ...form.data,
+                                        team_id: event.target.value,
+                                        scorecard_id:
+                                            matches.length === 1
+                                                ? String(matches[0].id)
+                                                : '',
+                                    });
+                                }}
+                            >
+                                <option value="">Select a team</option>
+                                {employee.evaluation_teams.map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                        {item.name} — {item.campaign.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </Field>
+                    )}
+                    {team && (
                         <div className="grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2">
                             <div>
                                 <small>Campaign</small>
-                                <b className="block">
-                                    {
-                                        employee.team_membership.team.campaign
-                                            .name
-                                    }
-                                </b>
+                                <b className="block">{team.campaign.name}</b>
                             </div>
                             <div>
                                 <small>Team</small>
-                                <b className="block">
-                                    {employee.team_membership.team.name}
-                                </b>
+                                <b className="block">{team.name}</b>
                             </div>
                         </div>
                     )}
@@ -120,14 +224,16 @@ export default function Create({
                                 form.setData('scorecard_id', e.target.value)
                             }
                             required
-                            disabled={!employee}
+                            disabled={!team}
                         >
                             <option value="">
                                 {!employee
                                     ? 'Select an employee first'
-                                    : eligible.length === 0
-                                      ? 'No active scorecard matches this campaign'
-                                      : 'Select Scorecard'}
+                                    : !team
+                                      ? 'Select an assigned team first'
+                                      : eligible.length === 0
+                                        ? 'No active scorecard matches this campaign'
+                                        : 'Select Scorecard'}
                             </option>
                             {eligible.map((s) => (
                                 <option value={s.id} key={s.id}>
@@ -147,17 +253,32 @@ export default function Create({
                                 automatically.
                             </span>
                         )}
-                        {employee && eligible.length === 0 && (
+                        {team && eligible.length === 0 && (
                             <span className="mt-2 block text-xs font-normal text-red-700">
-                                Activate a scorecard for{' '}
-                                {employee.team_membership.team.campaign.name}{' '}
+                                Activate a scorecard for {team.campaign.name}{' '}
                                 before creating this evaluation.
                             </span>
                         )}
                     </Field>
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Field label="Call Date & Time">
+                        <div className="min-w-0">
+                            <div className="mb-1 text-sm font-semibold">
+                                Call Date &amp; Time
+                            </div>
                             <DateTimeField
+                                fullWidth
+                                size="small"
+                                sx={{
+                                    '& .MuiOutlinedInput-root': { height: 42 },
+                                    '& .MuiInputBase-input': {
+                                        fontSize: '0.875rem',
+                                    },
+                                }}
+                                slotProps={{
+                                    htmlInput: {
+                                        'aria-label': 'Call Date & Time',
+                                    },
+                                }}
                                 type="datetime-local"
                                 value={form.data.call_at}
                                 onChange={(e) =>
@@ -165,7 +286,7 @@ export default function Create({
                                 }
                                 required
                             />
-                        </Field>
+                        </div>
                         <Field label="Direction">
                             <select
                                 value={form.data.call_direction}
@@ -221,17 +342,23 @@ export default function Create({
                             {error}
                         </p>
                     ))}
-                    <div className="flex justify-end">
-                        <button
-                            disabled={form.processing}
-                            className="rounded-xl bg-red-700 px-5 py-3 font-bold text-white"
-                        >
-                            Create Draft
-                        </button>
-                    </div>
-                </section>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, py: 2, flexShrink: 0 }}>
+                    <Button
+                        type="submit"
+                        variant="contained"
+                        disabled={
+                            form.processing ||
+                            !employee ||
+                            !team ||
+                            !form.data.scorecard_id
+                        }
+                    >
+                        {form.processing ? 'Creating…' : 'Create Draft'}
+                    </Button>
+                </DialogActions>
             </form>
-        </main>
+        </Dialog>
     );
 }
 function Field({
