@@ -58,7 +58,7 @@ class WorkplaceNotificationService
                     continue;
                 }
                 $date = $type === 'leave' ? $item->start_date->toDateString().' to '.$item->end_date->toDateString() : $item->request_date->toDateString();
-                $this->notify($user, $type, $item->id.':'.$item->status, ucfirst($type).' request '.(in_array($item->status, ['pending', 'needs_review'], true) ? 'awaiting review' : $item->status), ($item->user?->name ?? 'Employee').' · '.$date."\n".($item->reason ?? '').($item->review_notes ? "\nReview: ".$item->review_notes : '').($type === 'leave' && $item->leader_notes ? "\nTeam leader: ".$item->leader_notes : ''), $admin ? '/requests' : ($type === 'leave' ? '/leave-requests' : null), $item->updated_at);
+                $this->notify($user, $type, $item->id.':'.$item->status, ucfirst($type).' request '.(in_array($item->status, ['pending', 'needs_review'], true) ? 'awaiting review' : $item->status), ($item->user?->name ?? 'Employee').' · '.$date."\n".($item->reason ?? '').($item->review_notes ? "\nReview: ".$item->review_notes : '').($type === 'leave' && $item->leader_notes ? "\nTeam leader: ".$item->leader_notes : ''), $admin ? '/requests' : ($type === 'leave' ? '/leave-requests' : (in_array($user->role, ['agent', 'team_leader'], true) ? '/my-requests?type='.$type : null)), $item->updated_at);
             }
         }
         $sanctions = EmployeeSanction::where('created_at', '>=', $since)->when(! $admin, fn ($q) => $q->where('employee_id', $user->id));

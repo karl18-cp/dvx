@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AttendanceRecord;
 use App\Models\User;
 use App\Services\AttendanceFaceVerifier;
+use App\Services\AttendanceScheduleService;
 use App\Services\PersonalAttendanceClock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +19,7 @@ class PersonalAttendanceController extends Controller
     private function actor(Request $request): User
     {
         $user = $request->user()->fresh();
-        abort_unless($user->role === 'team_leader' && $user->status === 'active', 403);
+        abort_unless(in_array($user->role, ['agent', 'team_leader', 'trainee'], true) && $user->status === 'active', 403);
 
         return $user;
     }
@@ -30,6 +32,27 @@ class PersonalAttendanceController extends Controller
     public function status(Request $request, PersonalAttendanceClock $clock)
     {
         return response()->json($clock->context($this->actor($request)));
+    }
+
+    public function records(Request $request, AttendanceScheduleService $schedules)
+    {
+        $user = $this->actor($request);
+        $data = $request->validate(['date' => ['required', 'date_format:Y-m-d']]);
+        $stored = AttendanceRecord::where('user_id', $user->id)->whereDate('attendance_date', $data['date'])->first();
+        $record = $schedules->calculate($user, $data['date'], $stored);
+
+        return response()->json([
+            'date' => $data['date'],
+            'status' => $record->status ?? 'not_recorded',
+            'schedule' => $record->schedule_snapshot['name'] ?? null,
+            'totalMinutes' => $record->total_minutes,
+            'leaveMinutes' => $record->leave_minutes,
+            'times' => collect(['time_in', 'lunch_out', 'lunch_in', 'time_out'])->map(fn ($field) => [
+                'field' => $field,
+                'actual' => $record->getAttribute('actual_'.$field)?->toISOString(),
+                'credited' => $record->getAttribute($field)?->toISOString(),
+            ]),
+        ]);
     }
 
     public function challenge(Request $request, PersonalAttendanceClock $clock)
@@ -70,7 +93,7 @@ class PersonalAttendanceController extends Controller
         $verifier->verify($user, $data['frames'], $challenge->direction);
         DB::transaction(function () use ($user, $clock, $challenge, $credentialId, $credentialUpdated) {
             $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
-            abort_unless($locked->role === 'team_leader' && $locked->status === 'active', 403);
+            abort_unless(in_array($locked->role, ['agent', 'team_leader', 'trainee'], true) && $locked->status === 'active', 403);
             if (now()->gte($challenge->expires_at) || $locked->faceCredential?->id !== $credentialId || $locked->faceCredential?->updated_at?->toISOString() !== $credentialUpdated) {
                 throw ValidationException::withMessages(['face' => 'Your verification expired or enrollment changed. Please retry.']);
             }
@@ -89,7 +112,7 @@ class PersonalAttendanceController extends Controller
         $data = $request->validate(['action' => ['required', Rule::in(['lunch_out', 'lunch_in'])]]);
         DB::transaction(function () use ($user, $data, $clock) {
             $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
-            abort_unless($locked->role === 'team_leader' && $locked->status === 'active', 403);
+            abort_unless(in_array($locked->role, ['agent', 'team_leader', 'trainee'], true) && $locked->status === 'active', 403);
             $context = $clock->assertAction($locked, $data['action']);
             $clock->record($locked, $data['action'], $context['date']);
         });

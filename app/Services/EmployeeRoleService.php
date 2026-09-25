@@ -13,6 +13,7 @@ class EmployeeRoleService
         'Manager' => 'manager',
         'Team Leader' => 'team_leader',
         'Agent' => 'agent',
+        'Trainee' => 'trainee',
         'IT Admin' => 'it_admin',
         'IT Support' => 'it_support',
         'IT Developer' => 'it_developer',
@@ -28,6 +29,9 @@ class EmployeeRoleService
         DB::transaction(function () use ($actor, $employee, $role): void {
             $employee = User::query()->lockForUpdate()->findOrFail($employee->id);
             $previous = $employee->role;
+            if ($previous !== $role && ($previous === 'trainee' || $role === 'trainee')) {
+                throw ValidationException::withMessages(['position' => 'Create trainees through onboarding and graduate them from the Trainees tab.']);
+            }
             if ($previous === $role) {
                 return;
             }

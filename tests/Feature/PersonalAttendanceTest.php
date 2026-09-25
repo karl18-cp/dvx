@@ -7,6 +7,7 @@ use App\Models\CampaignSchedule;
 use App\Models\LeaveRequest;
 use App\Models\User;
 use App\Services\AttendanceFaceVerifier;
+use App\Services\AttendanceScheduleService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,19 @@ use Tests\TestCase;
 class PersonalAttendanceTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_active_trainee_can_clock_with_enrolled_face_and_personal_schedule(): void
+    {
+        $trainee = $this->leader();
+        $campaign = \App\Models\Campaign::create(['name' => 'Trainee attendance', 'abbreviation' => 'TA', 'is_active' => true]);
+        $trainee->forceFill(['role' => 'trainee', 'training_status' => 'in_training', 'training_campaign_id' => $campaign->id])->save();
+        $this->actingAs($trainee);
+        $this->mock(AttendanceFaceVerifier::class)->shouldReceive('verify')->once()->withArgs(fn ($user) => $user->id === $trainee->id)->andReturnNull();
+        $this->verify($this->challenge())->assertOk();
+        $record = AttendanceRecord::sole();
+        $this->assertSame($trainee->id, $record->user_id);
+        $this->assertSame('08:00', $record->time_in->setTimezone('Asia/Manila')->format('H:i'));
+    }
 
     private function leader(bool $night = false): User
     {
@@ -53,6 +67,22 @@ class PersonalAttendanceTest extends TestCase
             ->component('my-attendance')->where('clock.faceEnrolled', true)->where('clock.actions', ['time_in'])
             ->missing('clock.descriptor')->missing('clock.faceCredential'));
         $this->assertArrayNotHasKey('encrypted_descriptor', $leader->faceCredential->toArray());
+    }
+
+    public function test_records_modal_only_returns_the_signed_in_leaders_selected_day(): void
+    {
+        $leader = $this->leader();
+        $other = User::factory()->create(['role' => 'admin']);
+        app(AttendanceScheduleService::class)->record($leader, '2026-09-28', 'time_in', '07:45');
+        AttendanceRecord::create(['user_id' => $other->id, 'attendance_date' => '2026-09-28', 'status' => 'absent']);
+        $this->getJson('/my-attendance/records?date=2026-09-28&user_id='.$other->id)->assertOk()
+            ->assertJsonPath('date', '2026-09-28')->assertJsonPath('schedule', 'Clock shift')
+            ->assertJsonPath('times.0.actual', '2026-09-27T23:45:00.000000Z')
+            ->assertJsonPath('times.0.credited', '2026-09-28T00:00:00.000000Z');
+        $this->getJson('/my-attendance/records?date=2026-09-27')->assertOk()->assertJsonPath('times.0.actual', null);
+        $this->getJson('/my-attendance/records?date=invalid')->assertUnprocessable();
+        $this->assertDatabaseCount('attendance_records', 2);
+        $this->actingAs($other)->getJson('/my-attendance/records?date=2026-09-28')->assertForbidden();
     }
 
     public function test_face_verified_punches_use_current_user_server_time_schedule_and_break_deduction(): void
@@ -113,7 +143,7 @@ class PersonalAttendanceTest extends TestCase
         LeaveRequest::create(['user_id' => $user->id, 'start_date' => '2026-09-28', 'end_date' => '2026-09-28', 'number_of_days' => 1, 'leave_type' => 'Vacation', 'reason' => 'Leave', 'status' => 'approved', 'is_paid' => true]);
         $this->getJson('/my-attendance/status')->assertJsonPath('actions', []);
         $this->postJson('/my-attendance/challenge', ['action' => 'time_in'])->assertUnprocessable();
-        $user->update(['role' => 'agent']);
+        $user->update(['role' => 'admin']);
         $this->getJson('/my-attendance/status')->assertForbidden();
         $this->postJson('/my-attendance/challenge', ['action' => 'time_in'])->assertForbidden();
     }

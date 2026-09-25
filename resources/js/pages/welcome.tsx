@@ -117,7 +117,7 @@ export default function Welcome() {
                         <a href="#about">About</a>
                         <a href="#services">What We Do</a>
                         <a href="#careers">Careers</a>
-                        <a href="#application-status">Application Status</a>
+                        <a href="/applicant-portal">Applicant Portal</a>
                     </nav>
                     <div className="flex gap-2">
                         {auth.user ? (
@@ -143,7 +143,7 @@ export default function Welcome() {
                                 Apply Now
                             </a>
                             <a
-                                href="#application-status"
+                                href="/applicant-portal"
                                 className="text-center text-xs font-semibold text-white/75 hover:text-white"
                             >
                                 Check for Updates
@@ -171,8 +171,14 @@ export default function Welcome() {
                                             your application.
                                         </p>
                                         <p>
-                                            You can check it here on our website
-                                            after 24-48 hours.
+                                            Track your progress in the{' '}
+                                            <a
+                                                href="/applicant-portal"
+                                                className="font-bold underline"
+                                            >
+                                                Applicant Portal
+                                            </a>
+                                            .
                                         </p>
                                     </div>
                                 </div>
@@ -399,6 +405,25 @@ export default function Welcome() {
                                     </div>
                                     <div className="mt-4 rounded-xl bg-slate-50 p-4">
                                         <b>Recruitment update</b>
+                                        {statusResult.scheduled_start_at && (
+                                            <p className="mt-2 font-semibold">
+                                                {statusResult.schedule_label}{' '}
+                                                starts:{' '}
+                                                {new Intl.DateTimeFormat(
+                                                    'en-PH',
+                                                    {
+                                                        dateStyle: 'medium',
+                                                        timeStyle: 'short',
+                                                        timeZone: 'Asia/Manila',
+                                                    },
+                                                ).format(
+                                                    new Date(
+                                                        statusResult.scheduled_start_at,
+                                                    ),
+                                                )}{' '}
+                                                (Asia/Manila)
+                                            </p>
+                                        )}
                                         <p className="mt-1 text-slate-600">
                                             {statusResult.applicant_update ||
                                                 'No additional update has been posted yet.'}

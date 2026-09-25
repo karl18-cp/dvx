@@ -30,12 +30,12 @@ class CampaignScheduleController extends Controller
                     return $row;
                 }),
             ]),
-            'employees' => User::query()->with(['campaignSchedule:id,name', 'teamMembership.team.campaign:id,name'])
-                ->orderBy('name')->get(['id', 'name', 'username', 'role', 'status', 'campaign_schedule_id'])
+            'employees' => User::query()->with(['campaignSchedule:id,name', 'trainingCampaign:id,name', 'teamMembership.team.campaign:id,name'])
+                ->orderBy('name')->get(['id', 'name', 'username', 'role', 'status', 'campaign_schedule_id', 'training_campaign_id'])
                 ->map(fn ($user) => [
                     'id' => $user->id, 'name' => $user->name, 'username' => $user->username, 'role' => $user->role, 'status' => $user->status,
                     'schedule_id' => $user->campaign_schedule_id, 'schedule_name' => $user->campaignSchedule?->name,
-                    'team' => $user->teamMembership?->team?->name, 'campaign' => $user->teamMembership?->team?->campaign?->name,
+                    'team' => $user->teamMembership?->team?->name, 'campaign' => $user->role === 'trainee' ? $user->trainingCampaign?->name : $user->teamMembership?->team?->campaign?->name,
                 ]),
             'status' => $request->session()->get('status'),
         ]);

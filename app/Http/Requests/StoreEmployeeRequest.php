@@ -19,6 +19,7 @@ class StoreEmployeeRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'training_campaign_id' => ['required_if:position,Trainee', 'nullable', 'integer', Rule::exists('campaigns', 'id')->where('is_active', true)],
             'full_name' => ['required', 'string', 'max:100'],
             'position' => [
                 'required',

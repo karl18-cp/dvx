@@ -39,7 +39,7 @@ class JobApplicationWorkflowTest extends TestCase
         $manager = User::factory()->create(['role' => 'manager']);
         $application = JobApplication::query()->create(collect($this->payload())->except('resume')->all());
 
-        $this->actingAs($manager)->put(route('applications.update', $application), ['applicant_stage' => 'for_final_interview', 'internal_notes' => 'Strong initial screening.'])->assertRedirect();
+        $this->actingAs($manager)->put(route('applications.update', $application), ['scheduled_start' => '2026-10-01T09:00', 'applicant_stage' => 'for_final_interview', 'internal_notes' => 'Strong initial screening.'])->assertRedirect();
 
         $this->assertDatabaseHas('job_applications', ['id' => $application->id, 'applicant_stage' => 'for_final_interview', 'screening_status' => 'passed', 'interview_status' => 'scheduled', 'application_status' => 'for_interview', 'reviewed_by' => $manager->id]);
     }

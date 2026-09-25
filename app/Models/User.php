@@ -119,6 +119,11 @@ class User extends Authenticatable implements PasskeyUser
      *
      * @return array<string, string>
      */
+    public function trainingCampaign(): BelongsTo
+    {
+        return $this->belongsTo(Campaign::class, 'training_campaign_id');
+    }
+
     protected function casts(): array
     {
         return [

@@ -63,7 +63,7 @@ class AssessmentAssignmentController extends Controller
     {
         $search = trim($request->string('search')->toString());
 
-        return User::query()->where('status', 'active')->whereIn('role', ['agent', 'team_leader'])->when($search !== '', fn ($q) => $q->where(fn ($x) => $x->where('name', 'like', '%'.addcslashes($search, '%_\\').'%')->orWhere('username', 'like', '%'.addcslashes($search, '%_\\').'%')))
+        return User::query()->where('status', 'active')->whereIn('role', ['agent', 'team_leader', 'trainee'])->when($search !== '', fn ($q) => $q->where(fn ($x) => $x->where('name', 'like', '%'.addcslashes($search, '%_\\').'%')->orWhere('username', 'like', '%'.addcslashes($search, '%_\\').'%')))
             ->orderBy('name')->limit(30)->get(['id', 'name', 'username'])->all();
     }
 
@@ -72,7 +72,7 @@ class AssessmentAssignmentController extends Controller
         $data = $request->validate(['employee_ids' => ['array'], 'employee_ids.*' => ['integer'], 'team_ids' => ['array'], 'team_ids.*' => ['integer'], 'all_employees' => ['required', 'boolean']]);
         $ids = collect($data['employee_ids'] ?? [])->map(fn ($id) => (int) $id);
         if ($data['all_employees']) {
-            $ids = $ids->merge(User::query()->where('status', 'active')->whereIn('role', ['agent', 'team_leader'])->pluck('id'));
+            $ids = $ids->merge(User::query()->where('status', 'active')->whereIn('role', ['agent', 'team_leader', 'trainee'])->pluck('id'));
         }
         if ($data['team_ids'] ?? []) {
             $ids = $ids->merge(DB::table('team_members')->whereIn('team_id', $data['team_ids'])->pluck('user_id'));
@@ -92,7 +92,7 @@ class AssessmentAssignmentController extends Controller
         $assessment = Assessment::query()->where('status', 'published')->findOrFail($data['assessment_id']);
         $employees = collect($data['employee_ids'] ?? [])->mapWithKeys(fn ($id) => [(int) $id => null]);
         if ($data['all_employees']) {
-            User::query()->where('status', 'active')->whereIn('role', ['agent', 'team_leader'])->orderBy('id')->pluck('id')->each(fn ($id) => $employees->put($id, null));
+            User::query()->where('status', 'active')->whereIn('role', ['agent', 'team_leader', 'trainee'])->orderBy('id')->pluck('id')->each(fn ($id) => $employees->put($id, null));
         }
         if ($data['team_ids'] ?? []) {
             DB::table('team_members')->whereIn('team_id', $data['team_ids'])->orderBy('id')->get(['user_id', 'team_id'])->each(fn ($row) => $employees->put($row->user_id, $row->team_id));
@@ -102,7 +102,7 @@ class AssessmentAssignmentController extends Controller
         $due = isset($data['due_date']) ? $this->toUtc($data['due_date']) : $assessment->due_at;
         abort_if($available && $due && $due < $available, 422, 'Due date cannot be earlier than available date.');
         $now = now();
-        $campaigns = User::query()->whereKey($employees->keys())->with('teamMembership.team.campaign:id,name')->get()->keyBy('id')->map(fn ($employee) => $employee->teamMembership?->team?->campaign);
+        $campaigns = User::query()->whereKey($employees->keys())->with('teamMembership.team.campaign:id,name')->get()->keyBy('id')->map(fn ($employee) => $employee->role === 'trainee' ? $employee->trainingCampaign : $employee->teamMembership?->team?->campaign);
         if (! $assessment->applies_to_all_campaigns) {
             $allowedCampaigns = $assessment->campaigns()->pluck('campaigns.id');
             abort_if($campaigns->contains(fn ($campaign) => ! $campaign || ! $allowedCampaigns->contains($campaign->id)), 422, 'One or more selected employees are outside this assessment campaign scope.');

@@ -68,6 +68,33 @@ const primaryItems: MenuItem[] = [
     { label: 'My Coaching', icon: Presentation, href: '/my-coaching' },
 ];
 
+const traineeItems: MenuItem[] = [
+    { label: 'My Attendance', icon: CalendarDays, href: '/my-attendance' },
+    {
+        label: 'Training & Assessments',
+        icon: BookOpenCheck,
+        href: '/assessments',
+    },
+    { label: 'My Coaching', icon: Presentation, href: '/my-coaching' },
+];
+
+const agentItems: MenuItem[] = [
+    { label: 'Dashboard', icon: LayoutDashboard, href: dashboard().url },
+    { label: 'Ranking', icon: Trophy, href: '/ranking' },
+    { label: 'My Attendance', icon: CalendarCheck, href: '/my-attendance' },
+    { label: 'My Requests', icon: Inbox, href: '/my-requests' },
+    { label: 'Leave Requests', icon: CalendarCheck, href: '/leave-requests' },
+    { label: 'My Forms', icon: FileText, href: '/my-forms' },
+    { label: 'My Records', icon: ClipboardCheck, href: '/my-records' },
+    {
+        label: 'Training & Assessments',
+        icon: BookOpenCheck,
+        href: '/assessments',
+    },
+    { label: 'My Coaching', icon: Presentation, href: '/my-coaching' },
+    { label: 'DiverText', icon: MessagesSquare, href: '/divertext' },
+];
+
 const managementItems: MenuItem[] = [
     {
         label: 'Applicants',
@@ -80,6 +107,7 @@ const managementItems: MenuItem[] = [
         href: '/campaign-schedules',
     },
     { label: 'Employees', icon: Users, href: '/employees' },
+    { label: 'Trainees', icon: Users, href: '/trainees' },
     { label: 'Team Assigning', icon: UserRoundPlus, href: '/team-assigning' },
     { label: 'Team', icon: UsersRound, href: '/teams' },
     { label: 'Campaign', icon: Megaphone, href: '/campaigns' },
@@ -366,7 +394,12 @@ export function AppSidebar() {
                             }
                         />
                     )}
-                    {primaryItems
+                    {(auth.user.role === 'trainee'
+                        ? traineeItems
+                        : auth.user.role === 'agent'
+                          ? agentItems
+                          : primaryItems
+                    )
                         .filter(
                             (item) =>
                                 !['Task Tracker', 'EOD Report'].includes(
@@ -419,6 +452,7 @@ export function AppSidebar() {
                                 items={managementItems.filter(
                                     (item) =>
                                         ![
+                                            '/trainees',
                                             '/sanctions',
                                             '/forms',
                                             '/satisfaction-results',
@@ -488,15 +522,17 @@ export function AppSidebar() {
                     )}
 
                     <div className="pt-2">
-                        <SidebarItem
-                            item={{ label: 'Payroll', icon: ReceiptText }}
-                            currentUrl={
-                                (
-                                    page.props.navigation?.currentPath ??
-                                    page.url
-                                ).split('?')[0]
-                            }
-                        />
+                        {!['agent', 'trainee'].includes(auth.user.role) && (
+                            <SidebarItem
+                                item={{ label: 'Payroll', icon: ReceiptText }}
+                                currentUrl={
+                                    (
+                                        page.props.navigation?.currentPath ??
+                                        page.url
+                                    ).split('?')[0]
+                                }
+                            />
+                        )}
                         <SidebarItem
                             item={{
                                 label: 'Settings',

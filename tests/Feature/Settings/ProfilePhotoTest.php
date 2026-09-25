@@ -7,11 +7,29 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 class ProfilePhotoTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_employee_and_attendance_lists_use_the_current_profile_photo(): void
+    {
+        Storage::fake('local');
+        $user = User::factory()->create(['role' => 'admin', 'status' => 'active', 'username' => 'PHOTO001']);
+        $this->actingAs($user);
+        foreach (['first.png', 'replacement.png'] as $name) {
+            $this->post('/settings/profile/photo', ['photo' => UploadedFile::fake()->image($name, 100, 100)])->assertSessionHasNoErrors();
+            $avatar = $user->fresh()->avatar;
+            foreach (['/employees', '/attendance'] as $page) {
+                $this->get($page)->assertOk()->assertInertia(fn (AssertableInertia $response) => $response
+                    ->where('employees.0.avatar', $avatar)->missing('employees.0.profile_photo_path'));
+            }
+        }
+        $this->delete('/settings/profile/photo')->assertRedirect();
+        $this->get('/attendance')->assertInertia(fn (AssertableInertia $response) => $response->where('employees.0.avatar', ''));
+    }
 
     public function test_users_can_upload_replace_and_remove_their_own_photo(): void
     {

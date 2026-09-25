@@ -1,6 +1,6 @@
-# Team leader attendance clock
+# Employee attendance clock
 
-Team leaders use **My Attendance** for their own punches. Time in/out require a server-side face check against the signed-in account's administrator-enrolled template. Break out/in do not use the camera. The server determines the employee, shift date, and punch time, then uses the existing schedule and approved-request calculator for credited hours.
+Agents and team leaders use **My Attendance** for their own punches. Time in/out require a server-side face check against the signed-in account's administrator-enrolled template. Break out/in do not use the camera. The server determines the employee, shift date, and punch time, then uses the existing schedule and approved-request calculator for credited hours.
 
 ## Runtime
 

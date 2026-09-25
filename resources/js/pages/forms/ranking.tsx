@@ -1,5 +1,6 @@
 import { Head } from '@inertiajs/react';
 import { Trophy } from 'lucide-react';
+import EmployeeAvatar from '@/components/employee-avatar';
 import { panel } from './shared';
 
 export default function Ranking({
@@ -8,6 +9,7 @@ export default function Ranking({
     leaders: {
         id: number;
         name: string;
+        avatar: string;
         username: string | null;
         points: number;
         submissions: number;
@@ -51,7 +53,15 @@ export default function Ranking({
                                                     leader.points,
                                             ) + 1}
                                         </td>
-                                        <td className="p-4">{leader.name}</td>
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-3">
+                                                <EmployeeAvatar
+                                                    name={leader.name}
+                                                    avatar={leader.avatar}
+                                                />
+                                                <span>{leader.name}</span>
+                                            </div>
+                                        </td>
                                         <td className="p-4">
                                             {leader.username}
                                         </td>

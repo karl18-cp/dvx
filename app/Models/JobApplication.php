@@ -11,7 +11,17 @@ class JobApplication extends Model
 {
     protected function casts(): array
     {
-        return ['years_experience' => 'integer', 'resume_size' => 'integer', 'reviewed_at' => 'datetime'];
+        return ['years_experience' => 'integer', 'resume_size' => 'integer', 'reviewed_at' => 'datetime', 'scheduled_start_at' => 'datetime'];
+    }
+
+    public function scheduleLabel(): ?string
+    {
+        return match ($this->applicant_stage) {
+            'for_screening' => 'Screening interview',
+            'for_final_interview' => 'Final interview',
+            'passed' => 'Training',
+            default => null,
+        };
     }
 
     public function reviewer(): BelongsTo

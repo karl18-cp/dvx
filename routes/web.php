@@ -56,13 +56,20 @@ Route::get('/', function (Request $request) {
     return to_route('login');
 })->name('home');
 Route::inertia('/careers', 'welcome')->name('careers');
+Route::inertia('/applicant-portal', 'applicant-portal')->name('applicant-portal');
 Route::post('apply', [JobApplicationController::class, 'store'])->middleware('throttle:5,1')->name('applications.store');
 Route::get('application-status/challenge', [ApplicantStatusController::class, 'challenge'])->middleware('throttle:10,1')->name('application-status.challenge');
 Route::post('application-status', [ApplicantStatusController::class, 'lookup'])->middleware('throttle:5,10')->name('application-status.lookup');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('trainees', [\App\Http\Controllers\TraineeController::class, 'index'])->name('trainees');
+    Route::patch('trainees/{trainee}/review', [\App\Http\Controllers\TraineeController::class, 'review']);
+    Route::get('my-records', [\App\Http\Controllers\PersonalWorkspaceController::class, 'records'])->name('personal.records');
+    Route::get('my-requests', [\App\Http\Controllers\PersonalWorkspaceController::class, 'requests'])->name('personal.requests');
+    Route::post('my-requests', [\App\Http\Controllers\PersonalWorkspaceController::class, 'storeRequest'])->middleware('throttle:20,1');
     Route::get('my-attendance', [\App\Http\Controllers\PersonalAttendanceController::class, 'index'])->name('my-attendance');
     Route::get('my-attendance/status', [\App\Http\Controllers\PersonalAttendanceController::class, 'status']);
+    Route::get('my-attendance/records', [\App\Http\Controllers\PersonalAttendanceController::class, 'records']);
     Route::post('my-attendance/challenge', [\App\Http\Controllers\PersonalAttendanceController::class, 'challenge'])->middleware('throttle:attendance-challenge');
     Route::post('my-attendance/verify', [\App\Http\Controllers\PersonalAttendanceController::class, 'verify'])->middleware('throttle:attendance-verify');
     Route::post('my-attendance/break', [\App\Http\Controllers\PersonalAttendanceController::class, 'breakPunch'])->middleware('throttle:attendance-break');
@@ -216,6 +223,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('assessment.manager')->get('management/assessment-media/{material}', [AssessmentMaterialController::class, 'show'])->name('assessments.media.show');
     Route::middleware('assessment.manager')->group(function () {
         Route::get('management/applicants', [JobApplicationController::class, 'index'])->name('applications.index');
+        Route::post('management/applicants/{application}/email', [JobApplicationController::class, 'retryEmail'])->middleware('throttle:5,1')->name('applications.email');
         Route::put('management/applicants/{application}', [JobApplicationController::class, 'update'])->name('applications.update');
         Route::get('management/applicants/{application}/resume', [JobApplicationController::class, 'resume'])->name('applications.resume');
         Route::prefix('management/call-evaluations')->name('quality.evaluations.')->group(function () {

@@ -6,9 +6,19 @@ const UnreadContext = createContext(0);
 
 export const useDiverTextUnread = () => useContext(UnreadContext);
 
-export function DiverTextUnreadProvider({ children }: { children: ReactNode }) {
+export function DiverTextUnreadProvider({
+    children,
+    enabled = true,
+}: {
+    children: ReactNode;
+    enabled?: boolean;
+}) {
     const [count, setCount] = useState(0);
     useEffect(() => {
+        if (!enabled) {
+return;
+}
+
         const controller = new AbortController();
         let pending = false;
         const refresh = async () => {
@@ -49,7 +59,7 @@ export function DiverTextUnreadProvider({ children }: { children: ReactNode }) {
             window.removeEventListener('focus', update);
             document.removeEventListener('visibilitychange', update);
         };
-    }, []);
+    }, [enabled]);
 
     return (
         <UnreadContext.Provider value={count}>

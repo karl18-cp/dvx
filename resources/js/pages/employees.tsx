@@ -46,8 +46,14 @@ import {
     UserX,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import EmployeeAvatar from '@/components/employee-avatar';
 
 type EmployeesProps = {
+    onboardingOnly?: boolean;
+    onOnboardingClose?: () => void;
+    nextTraineeId: string;
+    trainingCampaigns: { id: number; name: string }[];
+    createTrainee: boolean;
     nextEmployeeId: string;
     employees: Employee[];
     stats: EmployeeStats;
@@ -64,6 +70,7 @@ type EmployeeStats = {
 
 type Employee = {
     id: number;
+    avatar: string;
     employeeId: string;
     name: string;
     email: string;
@@ -108,18 +115,11 @@ const positions = [
     'Manager',
     'Team Leader',
     'Agent',
+    'Trainee',
     'IT Admin',
     'IT Support',
     'IT Developer',
 ];
-
-const initialsFor = (name: string) =>
-    name
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((part) => part[0])
-        .join('')
-        .toUpperCase();
 
 const formatDate = (value?: string) =>
     value
@@ -131,6 +131,11 @@ const formatDate = (value?: string) =>
         : 'Not provided';
 
 export default function Employees({
+    onboardingOnly = false,
+    onOnboardingClose,
+    nextTraineeId,
+    trainingCampaigns,
+    createTrainee,
     nextEmployeeId,
     employees,
     stats,
@@ -141,7 +146,11 @@ export default function Employees({
     const [newRole, setNewRole] = useState('');
     const [roleError, setRoleError] = useState('');
     const [roleProcessing, setRoleProcessing] = useState(false);
-    const [createEmployeeOpen, setCreateEmployeeOpen] = useState(false);
+    const [createEmployeeOpen, setCreateEmployeeOpen] = useState(createTrainee);
+    const closeOnboarding = () => {
+        setCreateEmployeeOpen(false);
+        onOnboardingClose?.();
+    };
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
         null,
     );
@@ -223,7 +232,8 @@ export default function Employees({
     const videoRef = useRef<HTMLVideoElement>(null);
     const cameraStreamRef = useRef<MediaStream | null>(null);
     const [fullName, setFullName] = useState('');
-    const [position, setPosition] = useState('');
+    const [position, setPosition] = useState(createTrainee ? 'Trainee' : '');
+    const [trainingCampaignId, setTrainingCampaignId] = useState('');
     const [personalInfo, setPersonalInfo] = useState<PersonalInfo>({
         birthDate: '',
         startDate: '',
@@ -391,6 +401,10 @@ export default function Employees({
                             {
                                 full_name: fullName.trim(),
                                 position,
+                                training_campaign_id:
+                                    position === 'Trainee'
+                                        ? trainingCampaignId
+                                        : null,
                                 email: personalInfo.email.trim(),
                                 birth_date: personalInfo.birthDate,
                                 start_date: personalInfo.startDate,
@@ -423,7 +437,7 @@ export default function Employees({
                                     );
                                 },
                                 onSuccess: () => {
-                                    setCreateEmployeeOpen(false);
+                                    closeOnboarding();
                                     setEmployeeStep(0);
                                 },
                             },
@@ -549,768 +563,1072 @@ export default function Employees({
 
     return (
         <>
-            <Head title="Employees" />
+            {!onboardingOnly && (
+                <>
+                    <Head title="Employees" />
 
-            <main className="min-h-full bg-[#f7f7fa] p-4 sm:p-6 lg:p-8">
-                {statusMessage && (
-                    <Alert severity="success" className="mb-4">
-                        {statusMessage}
-                    </Alert>
-                )}
-                <div className="mx-auto max-w-[1500px] space-y-7">
-                    <header className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
-                        <div>
-                            <p className="mb-2 text-xs font-bold tracking-[0.2em] text-[#b72822] uppercase">
-                                Workforce Management
-                            </p>
-                            <h1 className="text-3xl font-bold tracking-[-0.03em] text-[#1b1d2a] sm:text-4xl">
-                                Employees
-                            </h1>
-                            <p className="mt-2 text-sm text-[#777b8e] sm:text-base">
-                                View and manage your organization&apos;s
-                                employee directory.
-                            </p>
-                        </div>
-
-                        <div className="flex flex-wrap gap-3">
-                            <button
-                                type="button"
-                                className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#dedfe6] bg-white px-4 text-sm font-semibold text-[#444759] shadow-sm transition hover:border-[#c8cad4] hover:bg-[#fafafa]"
-                            >
-                                <Download className="size-4" />
-                                Export
-                            </button>
-                            <Button
-                                variant="contained"
-                                startIcon={<Plus className="size-4" />}
-                                onClick={() => setCreateEmployeeOpen(true)}
-                            >
-                                Add Employee
-                            </Button>
-                        </div>
-                    </header>
-
-                    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                        {statCards.map((stat) => {
-                            const Icon = stat.icon;
-
-                            return (
-                                <article
-                                    key={stat.label}
-                                    className="rounded-2xl border border-[#e9e9ee] bg-white p-5 shadow-[0_8px_30px_rgba(22,24,35,0.04)]"
-                                >
-                                    <div className="flex items-start justify-between">
-                                        <div>
-                                            <p className="text-sm font-medium text-[#7a7e90]">
-                                                {stat.label}
-                                            </p>
-                                            <p className="mt-2 text-3xl font-bold tracking-tight text-[#202230]">
-                                                {stat.value}
-                                            </p>
-                                        </div>
-                                        <div
-                                            className={`flex size-11 items-center justify-center rounded-xl ${stat.color}`}
-                                        >
-                                            <Icon className="size-5" />
-                                        </div>
-                                    </div>
-                                    <p className="mt-3 text-xs font-medium text-[#9a9dad]">
-                                        {stat.note}
-                                    </p>
-                                </article>
-                            );
-                        })}
-                    </section>
-
-                    <section className="overflow-hidden rounded-3xl border border-[#e6e7ec] bg-white shadow-[0_16px_50px_rgba(25,27,38,0.06)]">
-                        <div className="border-b border-[#ededf1] p-5 sm:p-6">
-                            <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
-                                <div>
-                                    <h2 className="text-lg font-bold text-[#202230]">
-                                        Employee Directory
-                                    </h2>
-                                    <p className="mt-1 text-sm text-[#888b9b]">
-                                        Showing all registered employee accounts
-                                    </p>
-                                </div>
-
-                                <div className="flex flex-col gap-3 sm:flex-row">
-                                    <label className="relative block min-w-0 sm:w-72">
-                                        <Search className="absolute top-1/2 left-4 size-4 -translate-y-1/2 text-[#a1a4b2]" />
-                                        <input
-                                            type="search"
-                                            value={employeeSearch}
-                                            onChange={(event) =>
-                                                setEmployeeSearch(
-                                                    event.target.value,
-                                                )
-                                            }
-                                            placeholder="Search name or employee ID"
-                                            className="h-11 w-full rounded-xl border border-[#e1e2e8] bg-[#fafafd] pr-4 pl-11 text-sm text-[#303240] outline-none placeholder:text-[#a1a4b2] focus:border-[#bd352a] focus:ring-3 focus:ring-[#bd352a]/10"
-                                        />
-                                    </label>
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            setStatusFilter((current) => {
-                                                const filters = [
-                                                    'all',
-                                                    'active',
-                                                    'suspended',
-                                                    'floating',
-                                                    'resigned',
-                                                    'terminated',
-                                                ] as const;
-
-                                                return filters[
-                                                    (filters.indexOf(current) +
-                                                        1) %
-                                                        filters.length
-                                                ];
-                                            })
-                                        }
-                                        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#e1e2e8] bg-white px-4 text-sm font-semibold text-[#555869] hover:bg-[#fafafd]"
-                                    >
-                                        <Filter className="size-4" />
-                                        {statusFilter === 'all'
-                                            ? 'All statuses'
-                                            : statusFilter
-                                                  .charAt(0)
-                                                  .toUpperCase() +
-                                              statusFilter.slice(1)}
-                                    </button>
-                                    <TextField
-                                        select
-                                        size="small"
-                                        value={roleFilter}
-                                        onChange={(event) =>
-                                            setRoleFilter(event.target.value)
-                                        }
-                                        aria-label="Filter employees by role"
-                                        slotProps={{
-                                            select: {
-                                                displayEmpty: true,
-                                            },
-                                        }}
-                                        sx={{
-                                            minWidth: 150,
-                                            '& .MuiOutlinedInput-root': {
-                                                height: 44,
-                                                borderRadius: 3,
-                                                bgcolor: 'common.white',
-                                            },
-                                        }}
-                                    >
-                                        <MenuItem value="all">
-                                            All Roles
-                                        </MenuItem>
-                                        {positions.map((role) => (
-                                            <MenuItem key={role} value={role}>
-                                                {role}
-                                            </MenuItem>
-                                        ))}
-                                    </TextField>
-                                    <button
-                                        type="button"
-                                        aria-label="Refresh employees"
-                                        onClick={() =>
-                                            router.reload({
-                                                only: ['employees', 'stats'],
-                                            })
-                                        }
-                                        className="inline-flex size-11 items-center justify-center rounded-xl border border-[#e1e2e8] bg-white text-[#555869] hover:bg-[#fafafd]"
-                                    >
-                                        <RefreshCw className="size-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                            <table className="w-full min-w-[1050px] border-collapse text-left">
-                                <thead>
-                                    <tr className="bg-[#fafafd] text-[11px] font-bold tracking-[0.08em] text-[#8b8e9e] uppercase">
-                                        <th className="px-6 py-4">Employee</th>
-                                        <th className="px-5 py-4">
-                                            Employee ID
-                                        </th>
-                                        <th className="px-5 py-4">Position</th>
-                                        <th className="px-5 py-4">Team</th>
-                                        <th className="px-5 py-4">Schedule</th>
-                                        <th className="px-5 py-4">
-                                            Start Date
-                                        </th>
-                                        <th className="px-5 py-4">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-[#eff0f3]">
-                                    {paginatedEmployees.map(
-                                        (employee, index) => (
-                                            <tr
-                                                key={employee.id}
-                                                tabIndex={0}
-                                                role="button"
-                                                onClick={() =>
-                                                    setSelectedEmployee(
-                                                        employee,
-                                                    )
-                                                }
-                                                onKeyDown={(event) => {
-                                                    if (
-                                                        event.key === 'Enter' ||
-                                                        event.key === ' '
-                                                    ) {
-                                                        event.preventDefault();
-                                                        setSelectedEmployee(
-                                                            employee,
-                                                        );
-                                                    }
-                                                }}
-                                                className="group cursor-pointer transition hover:bg-[#fcfaf9] focus:bg-[#fcfaf9] focus:outline-none"
-                                            >
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div
-                                                            className={`flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${['from-emerald-500 to-amber-400', 'from-sky-500 to-indigo-500', 'from-fuchsia-500 to-rose-400', 'from-orange-500 to-red-500', 'from-violet-500 to-blue-500'][index % 5]} text-sm font-bold text-white shadow-sm`}
-                                                        >
-                                                            {initialsFor(
-                                                                employee.name,
-                                                            )}
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-semibold text-[#252735]">
-                                                                {employee.name}
-                                                            </p>
-                                                            <p className="mt-0.5 text-xs text-[#9295a4]">
-                                                                {employee.email}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-5 py-4">
-                                                    <span className="rounded-lg bg-[#fff1ef] px-2.5 py-1.5 font-mono text-xs font-bold text-[#bd3028]">
-                                                        {employee.employeeId}
-                                                    </span>
-                                                </td>
-                                                <td className="px-5 py-4 text-sm font-medium text-[#4d5060]">
-                                                    {employee.position}
-                                                    {canManageEmployees && (
-                                                        <button
-                                                            type="button"
-                                                            aria-label={`Change role for ${employee.name}`}
-                                                            onKeyDown={(
-                                                                event,
-                                                            ) =>
-                                                                event.stopPropagation()
-                                                            }
-                                                            onClick={(
-                                                                event,
-                                                            ) => {
-                                                                event.stopPropagation();
-                                                                setRoleEmployee(
-                                                                    employee,
-                                                                );
-                                                                setNewRole(
-                                                                    employee.position,
-                                                                );
-                                                                setRoleError(
-                                                                    '',
-                                                                );
-                                                            }}
-                                                            className="mt-1.5 flex items-center gap-1 rounded-md border border-[#ae1b20]/30 px-2 py-1 text-xs font-bold text-[#ae1b20] hover:bg-red-50"
-                                                        >
-                                                            <UserCheck className="size-3.5" />
-                                                            Change Role
-                                                        </button>
-                                                    )}
-                                                </td>
-                                                <td className="px-5 py-4">
-                                                    <span className="inline-flex rounded-full bg-[#eef6ff] px-3 py-1.5 text-xs font-semibold text-[#3472b9]">
-                                                        {employee.team ??
-                                                            'Not assigned'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-5 py-4 text-sm text-[#626576]">
-                                                    {employee.schedule ??
-                                                        'Not assigned'}
-                                                </td>
-                                                <td className="px-5 py-4 text-sm text-[#626576]">
-                                                    {formatDate(
-                                                        employee
-                                                            .personalInformation
-                                                            ?.startDate,
-                                                    )}
-                                                </td>
-                                                <td className="px-5 py-4">
-                                                    <span
-                                                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${
-                                                            employee.status ===
-                                                            'active'
-                                                                ? 'bg-emerald-50 text-emerald-700'
-                                                                : employee.status ===
-                                                                    'floating'
-                                                                  ? 'bg-amber-50 text-amber-700'
-                                                                  : 'bg-red-50 text-red-700'
-                                                        }`}
-                                                    >
-                                                        <span
-                                                            className={`size-1.5 rounded-full ${
-                                                                employee.status ===
-                                                                'active'
-                                                                    ? 'bg-emerald-500'
-                                                                    : employee.status ===
-                                                                        'floating'
-                                                                      ? 'bg-amber-500'
-                                                                      : 'bg-red-500'
-                                                            }`}
-                                                        />
-                                                        {employee.status
-                                                            .charAt(0)
-                                                            .toUpperCase() +
-                                                            employee.status.slice(
-                                                                1,
-                                                            )}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        ),
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <footer className="flex flex-col items-center justify-between gap-4 border-t border-[#ededf1] px-6 py-4 sm:flex-row">
-                            <p className="text-sm text-[#888b9b]">
-                                Showing{' '}
-                                <span className="font-semibold text-[#363846]">
-                                    {firstVisibleEmployee}–{lastVisibleEmployee}
-                                </span>{' '}
-                                of{' '}
-                                <span className="font-semibold text-[#363846]">
-                                    {filteredEmployees.length}
-                                </span>{' '}
-                                employees
-                            </p>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    aria-label="Previous page"
-                                    disabled={currentEmployeePage === 1}
-                                    onClick={() =>
-                                        setCurrentEmployeePage((page) =>
-                                            Math.max(1, page - 1),
-                                        )
-                                    }
-                                    className="inline-flex size-9 items-center justify-center rounded-lg border border-[#e1e2e8] text-[#555868] transition hover:bg-[#f8f8fa] disabled:cursor-not-allowed disabled:text-[#c5c7d0] disabled:hover:bg-white"
-                                >
-                                    <ChevronLeft className="size-4" />
-                                </button>
-                                {Array.from(
-                                    { length: totalEmployeePages },
-                                    (_, index) => index + 1,
-                                ).map((page) => (
-                                    <button
-                                        key={page}
-                                        type="button"
-                                        aria-current={
-                                            page === currentEmployeePage
-                                                ? 'page'
-                                                : undefined
-                                        }
-                                        onClick={() =>
-                                            setCurrentEmployeePage(page)
-                                        }
-                                        className={`size-9 rounded-lg text-sm font-semibold transition ${
-                                            page === currentEmployeePage
-                                                ? 'bg-[#a92420] text-white'
-                                                : 'text-[#666979] hover:bg-[#f3f3f6]'
-                                        }`}
-                                    >
-                                        {page}
-                                    </button>
-                                ))}
-                                <button
-                                    type="button"
-                                    aria-label="Next page"
-                                    disabled={
-                                        totalEmployeePages === 0 ||
-                                        currentEmployeePage ===
-                                            totalEmployeePages
-                                    }
-                                    onClick={() =>
-                                        setCurrentEmployeePage((page) =>
-                                            Math.min(
-                                                totalEmployeePages,
-                                                page + 1,
-                                            ),
-                                        )
-                                    }
-                                    className="inline-flex size-9 items-center justify-center rounded-lg border border-[#e1e2e8] text-[#555868] transition hover:bg-[#f8f8fa] disabled:cursor-not-allowed disabled:text-[#c5c7d0] disabled:hover:bg-white"
-                                >
-                                    <ChevronRight className="size-4" />
-                                </button>
-                            </div>
-                        </footer>
-                    </section>
-                </div>
-            </main>
-
-            <Dialog
-                open={roleEmployee !== null}
-                onClose={() => {
-                    if (!roleProcessing) {
-                        setRoleEmployee(null);
-                    }
-                }}
-                fullWidth
-                maxWidth="sm"
-                aria-labelledby="change-role-title"
-            >
-                <DialogTitle id="change-role-title">
-                    Change employee role
-                </DialogTitle>
-                <DialogContent>
-                    <p className="mb-4 text-sm text-slate-600">
-                        <strong>{roleEmployee?.name}</strong> (
-                        {roleEmployee?.employeeId}) currently has the{' '}
-                        <strong>{roleEmployee?.position}</strong> role.
-                    </p>
-                    <TextField
-                        select
-                        fullWidth
-                        label="New role"
-                        value={newRole}
-                        disabled={roleProcessing}
-                        onChange={(event) => {
-                            setNewRole(event.target.value);
-                            setRoleError('');
-                        }}
-                        error={!!roleError}
-                        helperText={
-                            roleError ||
-                            'The new role takes effect on the employee’s next page request.'
-                        }
-                        sx={{ mt: 1 }}
-                    >
-                        {positions.map((role) => (
-                            <MenuItem key={role} value={role}>
-                                {role}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                    {roleEmployee &&
-                        newRole !== roleEmployee.position &&
-                        (roleEmployee.position === 'Agent' ||
-                            roleEmployee.position === 'Team Leader') && (
-                            <Alert severity="info" sx={{ mt: 2 }}>
-                                Existing agent or team-leader assignments that
-                                no longer match this role will be removed. Use
-                                Team Assigning to set their new team
-                                responsibilities.
+                    <main className="min-h-full bg-[#f7f7fa] p-4 sm:p-6 lg:p-8">
+                        {statusMessage && (
+                            <Alert severity="success" className="mb-4">
+                                {statusMessage}
                             </Alert>
                         )}
-                    {newRole === 'Team Leader' &&
-                        newRole !== roleEmployee?.position && (
-                            <p className="mt-3 text-sm text-slate-600">
-                                After saving, this employee will appear in the
-                                Team Leaders list in Team Assigning.
-                            </p>
-                        )}
-                </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2.5 }}>
-                    <Button
-                        disabled={roleProcessing}
-                        onClick={() => setRoleEmployee(null)}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        variant="contained"
-                        disabled={
-                            roleProcessing ||
-                            !newRole ||
-                            newRole === roleEmployee?.position
-                        }
-                        onClick={() => {
-                            if (!roleEmployee) {
-                                return;
-                            }
+                        <div className="mx-auto max-w-[1500px] space-y-7">
+                            <header className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
+                                <div>
+                                    <p className="mb-2 text-xs font-bold tracking-[0.2em] text-[#b72822] uppercase">
+                                        Workforce Management
+                                    </p>
+                                    <h1 className="text-3xl font-bold tracking-[-0.03em] text-[#1b1d2a] sm:text-4xl">
+                                        Employees
+                                    </h1>
+                                    <p className="mt-2 text-sm text-[#777b8e] sm:text-base">
+                                        View and manage your organization&apos;s
+                                        employee directory.
+                                    </p>
+                                </div>
 
-                            router.patch(
-                                `/employees/${roleEmployee.id}/role`,
-                                { position: newRole },
-                                {
-                                    preserveScroll: true,
-                                    onStart: () => setRoleProcessing(true),
-                                    onError: (errors) =>
-                                        setRoleError(
-                                            errors.position ??
-                                                Object.values(errors).join(' '),
-                                        ),
-                                    onSuccess: () => setRoleEmployee(null),
-                                    onFinish: () => setRoleProcessing(false),
-                                },
-                            );
-                        }}
-                    >
-                        {roleProcessing ? 'Saving…' : 'Save Role'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            <Dialog
-                open={selectedEmployee !== null}
-                onClose={() => setSelectedEmployee(null)}
-                fullWidth
-                maxWidth="md"
-                slotProps={{
-                    paper: {
-                        sx: {
-                            overflow: 'hidden',
-                            borderRadius: 3,
-                            m: { xs: 1.5, sm: 3 },
-                        },
-                    },
-                }}
-            >
-                {selectedEmployee && (
-                    <>
-                        <Box
-                            sx={{
-                                position: 'relative',
-                                px: { xs: 2.5, sm: 3.5 },
-                                py: 3,
-                                pr: { xs: 9, sm: 11 },
-                                color: 'common.white',
-                                background:
-                                    'linear-gradient(125deg, #251525 0%, #681e26 55%, #b42b23 100%)',
-                            }}
-                        >
-                            <Stack
-                                direction="row"
-                                spacing={2}
-                                sx={{ alignItems: 'center' }}
-                            >
-                                <Stack
-                                    direction="row"
-                                    spacing={2}
-                                    sx={{ alignItems: 'center' }}
-                                >
-                                    <Box
-                                        sx={{
-                                            display: 'grid',
-                                            placeItems: 'center',
-                                            width: 54,
-                                            height: 54,
-                                            borderRadius: 2.5,
-                                            bgcolor: 'rgba(255,255,255,.14)',
-                                            border: '1px solid rgba(255,255,255,.2)',
-                                            fontWeight: 800,
-                                        }}
+                                <div className="flex flex-wrap gap-3">
+                                    <button
+                                        type="button"
+                                        className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#dedfe6] bg-white px-4 text-sm font-semibold text-[#444759] shadow-sm transition hover:border-[#c8cad4] hover:bg-[#fafafa]"
                                     >
-                                        {initialsFor(selectedEmployee.name)}
-                                    </Box>
-                                    <Box>
-                                        <Typography
-                                            variant="h5"
-                                            sx={{ fontWeight: 800 }}
+                                        <Download className="size-4" />
+                                        Export
+                                    </button>
+                                    <Button
+                                        variant="contained"
+                                        startIcon={<Plus className="size-4" />}
+                                        onClick={() =>
+                                            setCreateEmployeeOpen(true)
+                                        }
+                                    >
+                                        Add Employee
+                                    </Button>
+                                </div>
+                            </header>
+
+                            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                                {statCards.map((stat) => {
+                                    const Icon = stat.icon;
+
+                                    return (
+                                        <article
+                                            key={stat.label}
+                                            className="rounded-2xl border border-[#e9e9ee] bg-white p-5 shadow-[0_8px_30px_rgba(22,24,35,0.04)]"
                                         >
-                                            {selectedEmployee.name}
-                                        </Typography>
-                                        <Typography
-                                            variant="body2"
-                                            sx={{
-                                                color: 'rgba(255,255,255,.72)',
-                                            }}
+                                            <div className="flex items-start justify-between">
+                                                <div>
+                                                    <p className="text-sm font-medium text-[#7a7e90]">
+                                                        {stat.label}
+                                                    </p>
+                                                    <p className="mt-2 text-3xl font-bold tracking-tight text-[#202230]">
+                                                        {stat.value}
+                                                    </p>
+                                                </div>
+                                                <div
+                                                    className={`flex size-11 items-center justify-center rounded-xl ${stat.color}`}
+                                                >
+                                                    <Icon className="size-5" />
+                                                </div>
+                                            </div>
+                                            <p className="mt-3 text-xs font-medium text-[#9a9dad]">
+                                                {stat.note}
+                                            </p>
+                                        </article>
+                                    );
+                                })}
+                            </section>
+
+                            <section className="overflow-hidden rounded-3xl border border-[#e6e7ec] bg-white shadow-[0_16px_50px_rgba(25,27,38,0.06)]">
+                                <div className="border-b border-[#ededf1] p-5 sm:p-6">
+                                    <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
+                                        <div>
+                                            <h2 className="text-lg font-bold text-[#202230]">
+                                                Employee Directory
+                                            </h2>
+                                            <p className="mt-1 text-sm text-[#888b9b]">
+                                                Showing all registered employee
+                                                accounts
+                                            </p>
+                                        </div>
+
+                                        <div className="flex flex-col gap-3 sm:flex-row">
+                                            <label className="relative block min-w-0 sm:w-72">
+                                                <Search className="absolute top-1/2 left-4 size-4 -translate-y-1/2 text-[#a1a4b2]" />
+                                                <input
+                                                    type="search"
+                                                    value={employeeSearch}
+                                                    onChange={(event) =>
+                                                        setEmployeeSearch(
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                    placeholder="Search name or employee ID"
+                                                    className="h-11 w-full rounded-xl border border-[#e1e2e8] bg-[#fafafd] pr-4 pl-11 text-sm text-[#303240] outline-none placeholder:text-[#a1a4b2] focus:border-[#bd352a] focus:ring-3 focus:ring-[#bd352a]/10"
+                                                />
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setStatusFilter(
+                                                        (current) => {
+                                                            const filters = [
+                                                                'all',
+                                                                'active',
+                                                                'suspended',
+                                                                'floating',
+                                                                'resigned',
+                                                                'terminated',
+                                                            ] as const;
+
+                                                            return filters[
+                                                                (filters.indexOf(
+                                                                    current,
+                                                                ) +
+                                                                    1) %
+                                                                    filters.length
+                                                            ];
+                                                        },
+                                                    )
+                                                }
+                                                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#e1e2e8] bg-white px-4 text-sm font-semibold text-[#555869] hover:bg-[#fafafd]"
+                                            >
+                                                <Filter className="size-4" />
+                                                {statusFilter === 'all'
+                                                    ? 'All statuses'
+                                                    : statusFilter
+                                                          .charAt(0)
+                                                          .toUpperCase() +
+                                                      statusFilter.slice(1)}
+                                            </button>
+                                            <TextField
+                                                select
+                                                size="small"
+                                                value={roleFilter}
+                                                onChange={(event) =>
+                                                    setRoleFilter(
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                aria-label="Filter employees by role"
+                                                slotProps={{
+                                                    select: {
+                                                        displayEmpty: true,
+                                                    },
+                                                }}
+                                                sx={{
+                                                    minWidth: 150,
+                                                    '& .MuiOutlinedInput-root':
+                                                        {
+                                                            height: 44,
+                                                            borderRadius: 3,
+                                                            bgcolor:
+                                                                'common.white',
+                                                        },
+                                                }}
+                                            >
+                                                <MenuItem value="all">
+                                                    All Roles
+                                                </MenuItem>
+                                                {positions.map((role) => (
+                                                    <MenuItem
+                                                        key={role}
+                                                        value={role}
+                                                    >
+                                                        {role}
+                                                    </MenuItem>
+                                                ))}
+                                            </TextField>
+                                            <button
+                                                type="button"
+                                                aria-label="Refresh employees"
+                                                onClick={() =>
+                                                    router.reload({
+                                                        only: [
+                                                            'employees',
+                                                            'stats',
+                                                        ],
+                                                    })
+                                                }
+                                                className="inline-flex size-11 items-center justify-center rounded-xl border border-[#e1e2e8] bg-white text-[#555869] hover:bg-[#fafafd]"
+                                            >
+                                                <RefreshCw className="size-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="overflow-x-auto">
+                                    <table className="w-full min-w-[1050px] border-collapse text-left">
+                                        <thead>
+                                            <tr className="bg-[#fafafd] text-[11px] font-bold tracking-[0.08em] text-[#8b8e9e] uppercase">
+                                                <th className="px-6 py-4">
+                                                    Employee
+                                                </th>
+                                                <th className="px-5 py-4">
+                                                    Employee ID
+                                                </th>
+                                                <th className="px-5 py-4">
+                                                    Position
+                                                </th>
+                                                <th className="px-5 py-4">
+                                                    Team
+                                                </th>
+                                                <th className="px-5 py-4">
+                                                    Schedule
+                                                </th>
+                                                <th className="px-5 py-4">
+                                                    Start Date
+                                                </th>
+                                                <th className="px-5 py-4">
+                                                    Status
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-[#eff0f3]">
+                                            {paginatedEmployees.map(
+                                                (employee, index) => (
+                                                    <tr
+                                                        key={employee.id}
+                                                        tabIndex={0}
+                                                        role="button"
+                                                        onClick={() =>
+                                                            setSelectedEmployee(
+                                                                employee,
+                                                            )
+                                                        }
+                                                        onKeyDown={(event) => {
+                                                            if (
+                                                                event.key ===
+                                                                    'Enter' ||
+                                                                event.key ===
+                                                                    ' '
+                                                            ) {
+                                                                event.preventDefault();
+                                                                setSelectedEmployee(
+                                                                    employee,
+                                                                );
+                                                            }
+                                                        }}
+                                                        className="group cursor-pointer transition hover:bg-[#fcfaf9] focus:bg-[#fcfaf9] focus:outline-none"
+                                                    >
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <EmployeeAvatar
+                                                                    name={
+                                                                        employee.name
+                                                                    }
+                                                                    avatar={
+                                                                        employee.avatar
+                                                                    }
+                                                                    className="size-10 rounded-xl shadow-sm"
+                                                                    fallbackClassName={`rounded-xl bg-gradient-to-br ${['from-emerald-500 to-amber-400', 'from-sky-500 to-indigo-500', 'from-fuchsia-500 to-rose-400', 'from-orange-500 to-red-500', 'from-violet-500 to-blue-500'][index % 5]} text-sm text-white`}
+                                                                />
+                                                                <div>
+                                                                    <p className="font-semibold text-[#252735]">
+                                                                        {
+                                                                            employee.name
+                                                                        }
+                                                                    </p>
+                                                                    <p className="mt-0.5 text-xs text-[#9295a4]">
+                                                                        {
+                                                                            employee.email
+                                                                        }
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-5 py-4">
+                                                            <span className="rounded-lg bg-[#fff1ef] px-2.5 py-1.5 font-mono text-xs font-bold text-[#bd3028]">
+                                                                {
+                                                                    employee.employeeId
+                                                                }
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-5 py-4 text-sm font-medium text-[#4d5060]">
+                                                            {employee.position}
+                                                            {canManageEmployees && (
+                                                                <button
+                                                                    type="button"
+                                                                    aria-label={`Change role for ${employee.name}`}
+                                                                    onKeyDown={(
+                                                                        event,
+                                                                    ) =>
+                                                                        event.stopPropagation()
+                                                                    }
+                                                                    onClick={(
+                                                                        event,
+                                                                    ) => {
+                                                                        event.stopPropagation();
+                                                                        setRoleEmployee(
+                                                                            employee,
+                                                                        );
+                                                                        setNewRole(
+                                                                            employee.position,
+                                                                        );
+                                                                        setRoleError(
+                                                                            '',
+                                                                        );
+                                                                    }}
+                                                                    className="mt-1.5 flex items-center gap-1 rounded-md border border-[#ae1b20]/30 px-2 py-1 text-xs font-bold text-[#ae1b20] hover:bg-red-50"
+                                                                >
+                                                                    <UserCheck className="size-3.5" />
+                                                                    Change Role
+                                                                </button>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-5 py-4">
+                                                            <span className="inline-flex rounded-full bg-[#eef6ff] px-3 py-1.5 text-xs font-semibold text-[#3472b9]">
+                                                                {employee.team ??
+                                                                    'Not assigned'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-5 py-4 text-sm text-[#626576]">
+                                                            {employee.schedule ??
+                                                                'Not assigned'}
+                                                        </td>
+                                                        <td className="px-5 py-4 text-sm text-[#626576]">
+                                                            {formatDate(
+                                                                employee
+                                                                    .personalInformation
+                                                                    ?.startDate,
+                                                            )}
+                                                        </td>
+                                                        <td className="px-5 py-4">
+                                                            <span
+                                                                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${
+                                                                    employee.status ===
+                                                                    'active'
+                                                                        ? 'bg-emerald-50 text-emerald-700'
+                                                                        : employee.status ===
+                                                                            'floating'
+                                                                          ? 'bg-amber-50 text-amber-700'
+                                                                          : 'bg-red-50 text-red-700'
+                                                                }`}
+                                                            >
+                                                                <span
+                                                                    className={`size-1.5 rounded-full ${
+                                                                        employee.status ===
+                                                                        'active'
+                                                                            ? 'bg-emerald-500'
+                                                                            : employee.status ===
+                                                                                'floating'
+                                                                              ? 'bg-amber-500'
+                                                                              : 'bg-red-500'
+                                                                    }`}
+                                                                />
+                                                                {employee.status
+                                                                    .charAt(0)
+                                                                    .toUpperCase() +
+                                                                    employee.status.slice(
+                                                                        1,
+                                                                    )}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ),
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <footer className="flex flex-col items-center justify-between gap-4 border-t border-[#ededf1] px-6 py-4 sm:flex-row">
+                                    <p className="text-sm text-[#888b9b]">
+                                        Showing{' '}
+                                        <span className="font-semibold text-[#363846]">
+                                            {firstVisibleEmployee}–
+                                            {lastVisibleEmployee}
+                                        </span>{' '}
+                                        of{' '}
+                                        <span className="font-semibold text-[#363846]">
+                                            {filteredEmployees.length}
+                                        </span>{' '}
+                                        employees
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            aria-label="Previous page"
+                                            disabled={currentEmployeePage === 1}
+                                            onClick={() =>
+                                                setCurrentEmployeePage((page) =>
+                                                    Math.max(1, page - 1),
+                                                )
+                                            }
+                                            className="inline-flex size-9 items-center justify-center rounded-lg border border-[#e1e2e8] text-[#555868] transition hover:bg-[#f8f8fa] disabled:cursor-not-allowed disabled:text-[#c5c7d0] disabled:hover:bg-white"
                                         >
-                                            {selectedEmployee.employeeId} ·{' '}
-                                            {selectedEmployee.position}
-                                        </Typography>
-                                    </Box>
-                                </Stack>
-                            </Stack>
-                            <IconButton
-                                aria-label="Close employee information"
-                                onClick={() => setSelectedEmployee(null)}
-                                sx={{
-                                    position: 'absolute',
-                                    top: { xs: 20, sm: 24 },
-                                    right: { xs: 20, sm: 28 },
-                                    width: 44,
-                                    height: 44,
-                                    color: 'common.white',
-                                    bgcolor: 'rgba(255,255,255,.14)',
-                                    border: '1px solid rgba(255,255,255,.08)',
-                                    '&:hover': {
-                                        bgcolor: 'rgba(255,255,255,.24)',
-                                    },
+                                            <ChevronLeft className="size-4" />
+                                        </button>
+                                        {Array.from(
+                                            { length: totalEmployeePages },
+                                            (_, index) => index + 1,
+                                        ).map((page) => (
+                                            <button
+                                                key={page}
+                                                type="button"
+                                                aria-current={
+                                                    page === currentEmployeePage
+                                                        ? 'page'
+                                                        : undefined
+                                                }
+                                                onClick={() =>
+                                                    setCurrentEmployeePage(page)
+                                                }
+                                                className={`size-9 rounded-lg text-sm font-semibold transition ${
+                                                    page === currentEmployeePage
+                                                        ? 'bg-[#a92420] text-white'
+                                                        : 'text-[#666979] hover:bg-[#f3f3f6]'
+                                                }`}
+                                            >
+                                                {page}
+                                            </button>
+                                        ))}
+                                        <button
+                                            type="button"
+                                            aria-label="Next page"
+                                            disabled={
+                                                totalEmployeePages === 0 ||
+                                                currentEmployeePage ===
+                                                    totalEmployeePages
+                                            }
+                                            onClick={() =>
+                                                setCurrentEmployeePage((page) =>
+                                                    Math.min(
+                                                        totalEmployeePages,
+                                                        page + 1,
+                                                    ),
+                                                )
+                                            }
+                                            className="inline-flex size-9 items-center justify-center rounded-lg border border-[#e1e2e8] text-[#555868] transition hover:bg-[#f8f8fa] disabled:cursor-not-allowed disabled:text-[#c5c7d0] disabled:hover:bg-white"
+                                        >
+                                            <ChevronRight className="size-4" />
+                                        </button>
+                                    </div>
+                                </footer>
+                            </section>
+                        </div>
+                    </main>
+
+                    <Dialog
+                        open={roleEmployee !== null}
+                        onClose={() => {
+                            if (!roleProcessing) {
+                                setRoleEmployee(null);
+                            }
+                        }}
+                        fullWidth
+                        maxWidth="sm"
+                        aria-labelledby="change-role-title"
+                    >
+                        <DialogTitle id="change-role-title">
+                            Change employee role
+                        </DialogTitle>
+                        <DialogContent>
+                            <p className="mb-4 text-sm text-slate-600">
+                                <strong>{roleEmployee?.name}</strong> (
+                                {roleEmployee?.employeeId}) currently has the{' '}
+                                <strong>{roleEmployee?.position}</strong> role.
+                            </p>
+                            <TextField
+                                select
+                                fullWidth
+                                label="New role"
+                                value={newRole}
+                                disabled={roleProcessing}
+                                onChange={(event) => {
+                                    setNewRole(event.target.value);
+                                    setRoleError('');
+                                }}
+                                error={!!roleError}
+                                helperText={
+                                    roleError ||
+                                    'The new role takes effect on the employee’s next page request.'
+                                }
+                                sx={{ mt: 1 }}
+                            >
+                                {positions.map((role) => (
+                                    <MenuItem key={role} value={role}>
+                                        {role}
+                                    </MenuItem>
+                                ))}
+                            </TextField>
+                            {roleEmployee &&
+                                newRole !== roleEmployee.position &&
+                                (roleEmployee.position === 'Agent' ||
+                                    roleEmployee.position ===
+                                        'Team Leader') && (
+                                    <Alert severity="info" sx={{ mt: 2 }}>
+                                        Existing agent or team-leader
+                                        assignments that no longer match this
+                                        role will be removed. Use Team Assigning
+                                        to set their new team responsibilities.
+                                    </Alert>
+                                )}
+                            {newRole === 'Team Leader' &&
+                                newRole !== roleEmployee?.position && (
+                                    <p className="mt-3 text-sm text-slate-600">
+                                        After saving, this employee will appear
+                                        in the Team Leaders list in Team
+                                        Assigning.
+                                    </p>
+                                )}
+                        </DialogContent>
+                        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+                            <Button
+                                disabled={roleProcessing}
+                                onClick={() => setRoleEmployee(null)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="contained"
+                                disabled={
+                                    roleProcessing ||
+                                    !newRole ||
+                                    newRole === roleEmployee?.position
+                                }
+                                onClick={() => {
+                                    if (!roleEmployee) {
+                                        return;
+                                    }
+
+                                    router.patch(
+                                        `/employees/${roleEmployee.id}/role`,
+                                        { position: newRole },
+                                        {
+                                            preserveScroll: true,
+                                            onStart: () =>
+                                                setRoleProcessing(true),
+                                            onError: (errors) =>
+                                                setRoleError(
+                                                    errors.position ??
+                                                        Object.values(
+                                                            errors,
+                                                        ).join(' '),
+                                                ),
+                                            onSuccess: () =>
+                                                setRoleEmployee(null),
+                                            onFinish: () =>
+                                                setRoleProcessing(false),
+                                        },
+                                    );
                                 }}
                             >
-                                <X size={21} />
-                            </IconButton>
-                        </Box>
+                                {roleProcessing ? 'Saving…' : 'Save Role'}
+                            </Button>
+                        </DialogActions>
+                    </Dialog>
 
-                        <Tabs
-                            value={employeeModalTab}
-                            onChange={(_, value: number) =>
-                                setEmployeeModalTab(value)
-                            }
-                            sx={{
-                                px: { xs: 2.5, sm: 3.5 },
-                                borderBottom: '1px solid',
-                                borderColor: 'divider',
-                            }}
-                        >
-                            <Tab label="Personal Information" />
-                            {canManageEmployees && (
-                                <Tab label="Account & Edit" />
-                            )}
-                        </Tabs>
+                    <Dialog
+                        open={selectedEmployee !== null}
+                        onClose={() => setSelectedEmployee(null)}
+                        fullWidth
+                        maxWidth="md"
+                        slotProps={{
+                            paper: {
+                                sx: {
+                                    overflow: 'hidden',
+                                    borderRadius: 3,
+                                    m: { xs: 1.5, sm: 3 },
+                                },
+                            },
+                        }}
+                    >
+                        {selectedEmployee && (
+                            <>
+                                <Box
+                                    sx={{
+                                        position: 'relative',
+                                        px: { xs: 2.5, sm: 3.5 },
+                                        py: 3,
+                                        pr: { xs: 9, sm: 11 },
+                                        color: 'common.white',
+                                        background:
+                                            'linear-gradient(125deg, #251525 0%, #681e26 55%, #b42b23 100%)',
+                                    }}
+                                >
+                                    <Stack
+                                        direction="row"
+                                        spacing={2}
+                                        sx={{ alignItems: 'center' }}
+                                    >
+                                        <Stack
+                                            direction="row"
+                                            spacing={2}
+                                            sx={{ alignItems: 'center' }}
+                                        >
+                                            <EmployeeAvatar
+                                                name={selectedEmployee.name}
+                                                avatar={selectedEmployee.avatar}
+                                                className="size-[54px] rounded-xl border border-white/20"
+                                                fallbackClassName="rounded-xl bg-white/15 text-white"
+                                            />
+                                            <Box>
+                                                <Typography
+                                                    variant="h5"
+                                                    sx={{ fontWeight: 800 }}
+                                                >
+                                                    {selectedEmployee.name}
+                                                </Typography>
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        color: 'rgba(255,255,255,.72)',
+                                                    }}
+                                                >
+                                                    {
+                                                        selectedEmployee.employeeId
+                                                    }{' '}
+                                                    ·{' '}
+                                                    {selectedEmployee.position}
+                                                </Typography>
+                                            </Box>
+                                        </Stack>
+                                    </Stack>
+                                    <IconButton
+                                        aria-label="Close employee information"
+                                        onClick={() =>
+                                            setSelectedEmployee(null)
+                                        }
+                                        sx={{
+                                            position: 'absolute',
+                                            top: { xs: 20, sm: 24 },
+                                            right: { xs: 20, sm: 28 },
+                                            width: 44,
+                                            height: 44,
+                                            color: 'common.white',
+                                            bgcolor: 'rgba(255,255,255,.14)',
+                                            border: '1px solid rgba(255,255,255,.08)',
+                                            '&:hover': {
+                                                bgcolor:
+                                                    'rgba(255,255,255,.24)',
+                                            },
+                                        }}
+                                    >
+                                        <X size={21} />
+                                    </IconButton>
+                                </Box>
 
-                        <DialogContent
-                            sx={{ px: { xs: 2.5, sm: 3.5 }, py: 3.5 }}
-                        >
-                            {employeeModalTab === 0 ? (
-                                selectedEmployee.personalInformation ? (
-                                    <Stack spacing={3}>
-                                        <Box>
+                                <Tabs
+                                    value={employeeModalTab}
+                                    onChange={(_, value: number) =>
+                                        setEmployeeModalTab(value)
+                                    }
+                                    sx={{
+                                        px: { xs: 2.5, sm: 3.5 },
+                                        borderBottom: '1px solid',
+                                        borderColor: 'divider',
+                                    }}
+                                >
+                                    <Tab label="Personal Information" />
+                                    {canManageEmployees && (
+                                        <Tab label="Account & Edit" />
+                                    )}
+                                </Tabs>
+
+                                <DialogContent
+                                    sx={{ px: { xs: 2.5, sm: 3.5 }, py: 3.5 }}
+                                >
+                                    {employeeModalTab === 0 ? (
+                                        selectedEmployee.personalInformation ? (
+                                            <Stack spacing={3}>
+                                                <Box>
+                                                    <Typography
+                                                        variant="subtitle1"
+                                                        sx={{ fontWeight: 800 }}
+                                                    >
+                                                        Personal Information
+                                                    </Typography>
+                                                    <Typography
+                                                        variant="body2"
+                                                        color="text.secondary"
+                                                    >
+                                                        Employee contact and
+                                                        identity details
+                                                    </Typography>
+                                                </Box>
+                                                <Box
+                                                    sx={{
+                                                        display: 'grid',
+                                                        gridTemplateColumns: {
+                                                            xs: '1fr',
+                                                            sm: 'repeat(2, 1fr)',
+                                                        },
+                                                        gap: 2,
+                                                    }}
+                                                >
+                                                    {[
+                                                        [
+                                                            'Email address',
+                                                            selectedEmployee
+                                                                .personalInformation
+                                                                .email,
+                                                        ],
+                                                        [
+                                                            'Phone number',
+                                                            selectedEmployee
+                                                                .personalInformation
+                                                                .phone,
+                                                        ],
+                                                        [
+                                                            'Birth date',
+                                                            formatDate(
+                                                                selectedEmployee
+                                                                    .personalInformation
+                                                                    .birthDate,
+                                                            ),
+                                                        ],
+                                                        [
+                                                            'Start date',
+                                                            formatDate(
+                                                                selectedEmployee
+                                                                    .personalInformation
+                                                                    .startDate,
+                                                            ),
+                                                        ],
+                                                        [
+                                                            'Gender',
+                                                            selectedEmployee
+                                                                .personalInformation
+                                                                .gender,
+                                                        ],
+                                                        [
+                                                            'Civil status',
+                                                            selectedEmployee
+                                                                .personalInformation
+                                                                .civilStatus,
+                                                        ],
+                                                        [
+                                                            'Team',
+                                                            selectedEmployee.team ??
+                                                                'Not assigned',
+                                                        ],
+                                                        [
+                                                            'Schedule',
+                                                            selectedEmployee.schedule ??
+                                                                'Not assigned',
+                                                        ],
+                                                    ].map(([label, value]) => (
+                                                        <Box
+                                                            key={label}
+                                                            sx={{
+                                                                p: 2,
+                                                                border: '1px solid',
+                                                                borderColor:
+                                                                    'divider',
+                                                                borderRadius: 2,
+                                                                bgcolor:
+                                                                    '#fafafd',
+                                                            }}
+                                                        >
+                                                            <Typography
+                                                                variant="caption"
+                                                                color="text.secondary"
+                                                            >
+                                                                {label}
+                                                            </Typography>
+                                                            <Typography
+                                                                variant="body2"
+                                                                sx={{
+                                                                    fontWeight: 700,
+                                                                    mt: 0.5,
+                                                                    overflowWrap:
+                                                                        'anywhere',
+                                                                }}
+                                                            >
+                                                                {value}
+                                                            </Typography>
+                                                        </Box>
+                                                    ))}
+                                                </Box>
+
+                                                <Box>
+                                                    <Typography
+                                                        variant="caption"
+                                                        color="text.secondary"
+                                                    >
+                                                        Current address
+                                                    </Typography>
+                                                    <Typography
+                                                        variant="body2"
+                                                        sx={{
+                                                            mt: 0.75,
+                                                            fontWeight: 700,
+                                                        }}
+                                                    >
+                                                        {
+                                                            selectedEmployee
+                                                                .personalInformation
+                                                                .address
+                                                        }
+                                                    </Typography>
+                                                </Box>
+
+                                                <Divider />
+
+                                                <Box>
+                                                    <Typography
+                                                        variant="subtitle1"
+                                                        sx={{ fontWeight: 800 }}
+                                                    >
+                                                        Emergency Contact
+                                                    </Typography>
+                                                    <Box
+                                                        sx={{
+                                                            display: 'grid',
+                                                            gridTemplateColumns:
+                                                                {
+                                                                    xs: '1fr',
+                                                                    sm: 'repeat(2, 1fr)',
+                                                                },
+                                                            gap: 2,
+                                                            mt: 2,
+                                                        }}
+                                                    >
+                                                        {[
+                                                            [
+                                                                'Contact name',
+                                                                selectedEmployee
+                                                                    .personalInformation
+                                                                    .emergencyName,
+                                                            ],
+                                                            [
+                                                                'Relationship',
+                                                                selectedEmployee
+                                                                    .personalInformation
+                                                                    .emergencyRelationship,
+                                                            ],
+                                                            [
+                                                                'Contact phone',
+                                                                selectedEmployee
+                                                                    .personalInformation
+                                                                    .emergencyPhone,
+                                                            ],
+                                                            [
+                                                                'Contact address',
+                                                                selectedEmployee
+                                                                    .personalInformation
+                                                                    .emergencyAddress ||
+                                                                    'Not provided',
+                                                            ],
+                                                        ].map(
+                                                            ([
+                                                                label,
+                                                                value,
+                                                            ]) => (
+                                                                <Box
+                                                                    key={label}
+                                                                >
+                                                                    <Typography
+                                                                        variant="caption"
+                                                                        color="text.secondary"
+                                                                    >
+                                                                        {label}
+                                                                    </Typography>
+                                                                    <Typography
+                                                                        variant="body2"
+                                                                        sx={{
+                                                                            mt: 0.5,
+                                                                            fontWeight: 700,
+                                                                        }}
+                                                                    >
+                                                                        {value}
+                                                                    </Typography>
+                                                                </Box>
+                                                            ),
+                                                        )}
+                                                    </Box>
+                                                </Box>
+                                            </Stack>
+                                        ) : (
+                                            <Alert severity="info">
+                                                This account does not have a
+                                                linked personal information
+                                                record yet.
+                                            </Alert>
+                                        )
+                                    ) : employeeEditForm &&
+                                      canManageEmployees ? (
+                                        <Stack spacing={3}>
+                                            <Box>
+                                                <Typography
+                                                    variant="subtitle1"
+                                                    sx={{ fontWeight: 800 }}
+                                                >
+                                                    Account & Employee Editor
+                                                </Typography>
+                                                <Typography
+                                                    variant="body2"
+                                                    color="text.secondary"
+                                                >
+                                                    Changes are saved to the
+                                                    linked account and personal
+                                                    information.
+                                                </Typography>
+                                            </Box>
+
+                                            <Box
+                                                sx={{
+                                                    display: 'grid',
+                                                    gridTemplateColumns: {
+                                                        xs: '1fr',
+                                                        sm: 'repeat(2, 1fr)',
+                                                    },
+                                                    gap: 2,
+                                                }}
+                                            >
+                                                <TextField
+                                                    label="Full Name"
+                                                    value={
+                                                        employeeEditForm.fullName
+                                                    }
+                                                    onChange={(event) =>
+                                                        updateEmployeeEditField(
+                                                            'fullName',
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                    error={Boolean(
+                                                        employeeEditErrors.full_name,
+                                                    )}
+                                                    helperText={
+                                                        employeeEditErrors.full_name
+                                                    }
+                                                />
+                                                <TextField
+                                                    select
+                                                    label="Position"
+                                                    value={
+                                                        employeeEditForm.position
+                                                    }
+                                                    onChange={(event) =>
+                                                        updateEmployeeEditField(
+                                                            'position',
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                    error={Boolean(
+                                                        employeeEditErrors.position,
+                                                    )}
+                                                    helperText={
+                                                        employeeEditErrors.position ||
+                                                        (employeeEditForm.position !==
+                                                        selectedEmployee.position
+                                                            ? 'Role changes clear incompatible team assignments. Use Team Assigning to set new responsibilities.'
+                                                            : undefined)
+                                                    }
+                                                >
+                                                    {positions.map((option) => (
+                                                        <MenuItem
+                                                            key={option}
+                                                            value={option}
+                                                        >
+                                                            {option}
+                                                        </MenuItem>
+                                                    ))}
+                                                </TextField>
+                                                <TextField
+                                                    label="Email Address"
+                                                    type="email"
+                                                    value={
+                                                        employeeEditForm.email
+                                                    }
+                                                    onChange={(event) =>
+                                                        updateEmployeeEditField(
+                                                            'email',
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                    error={Boolean(
+                                                        employeeEditErrors.email,
+                                                    )}
+                                                    helperText={
+                                                        employeeEditErrors.email
+                                                    }
+                                                />
+                                                <TextField
+                                                    select
+                                                    label="Employment Status"
+                                                    value={
+                                                        employeeEditForm.status
+                                                    }
+                                                    onChange={(event) =>
+                                                        updateEmployeeEditField(
+                                                            'status',
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                    error={Boolean(
+                                                        employeeEditErrors.status,
+                                                    )}
+                                                >
+                                                    {[
+                                                        ['active', 'Active'],
+                                                        [
+                                                            'suspended',
+                                                            'Suspended',
+                                                        ],
+                                                        [
+                                                            'floating',
+                                                            'Floating',
+                                                        ],
+                                                        [
+                                                            'resigned',
+                                                            'Resigned',
+                                                        ],
+                                                        [
+                                                            'terminated',
+                                                            'Terminated',
+                                                        ],
+                                                    ].map(([value, label]) => (
+                                                        <MenuItem
+                                                            key={value}
+                                                            value={value}
+                                                        >
+                                                            {label}
+                                                        </MenuItem>
+                                                    ))}
+                                                </TextField>
+                                            </Box>
+
+                                            {employeeEditForm.status !==
+                                                'active' && (
+                                                <Alert severity="warning">
+                                                    Saving this status
+                                                    immediately disables this
+                                                    employee&apos;s login
+                                                    credentials.
+                                                </Alert>
+                                            )}
+
+                                            <TextField
+                                                label="Renew Password"
+                                                type="password"
+                                                value={
+                                                    employeeEditForm.newPassword
+                                                }
+                                                onChange={(event) =>
+                                                    updateEmployeeEditField(
+                                                        'newPassword',
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                error={Boolean(
+                                                    employeeEditErrors.new_password,
+                                                )}
+                                                helperText={
+                                                    employeeEditErrors.new_password ??
+                                                    'Leave blank to keep the current password. Minimum 8 characters.'
+                                                }
+                                            />
+
+                                            <Divider />
                                             <Typography
                                                 variant="subtitle1"
                                                 sx={{ fontWeight: 800 }}
                                             >
                                                 Personal Information
-                                            </Typography>
-                                            <Typography
-                                                variant="body2"
-                                                color="text.secondary"
-                                            >
-                                                Employee contact and identity
-                                                details
-                                            </Typography>
-                                        </Box>
-                                        <Box
-                                            sx={{
-                                                display: 'grid',
-                                                gridTemplateColumns: {
-                                                    xs: '1fr',
-                                                    sm: 'repeat(2, 1fr)',
-                                                },
-                                                gap: 2,
-                                            }}
-                                        >
-                                            {[
-                                                [
-                                                    'Email address',
-                                                    selectedEmployee
-                                                        .personalInformation
-                                                        .email,
-                                                ],
-                                                [
-                                                    'Phone number',
-                                                    selectedEmployee
-                                                        .personalInformation
-                                                        .phone,
-                                                ],
-                                                [
-                                                    'Birth date',
-                                                    formatDate(
-                                                        selectedEmployee
-                                                            .personalInformation
-                                                            .birthDate,
-                                                    ),
-                                                ],
-                                                [
-                                                    'Start date',
-                                                    formatDate(
-                                                        selectedEmployee
-                                                            .personalInformation
-                                                            .startDate,
-                                                    ),
-                                                ],
-                                                [
-                                                    'Gender',
-                                                    selectedEmployee
-                                                        .personalInformation
-                                                        .gender,
-                                                ],
-                                                [
-                                                    'Civil status',
-                                                    selectedEmployee
-                                                        .personalInformation
-                                                        .civilStatus,
-                                                ],
-                                                [
-                                                    'Team',
-                                                    selectedEmployee.team ??
-                                                        'Not assigned',
-                                                ],
-                                                [
-                                                    'Schedule',
-                                                    selectedEmployee.schedule ??
-                                                        'Not assigned',
-                                                ],
-                                            ].map(([label, value]) => (
-                                                <Box
-                                                    key={label}
-                                                    sx={{
-                                                        p: 2,
-                                                        border: '1px solid',
-                                                        borderColor: 'divider',
-                                                        borderRadius: 2,
-                                                        bgcolor: '#fafafd',
-                                                    }}
-                                                >
-                                                    <Typography
-                                                        variant="caption"
-                                                        color="text.secondary"
-                                                    >
-                                                        {label}
-                                                    </Typography>
-                                                    <Typography
-                                                        variant="body2"
-                                                        sx={{
-                                                            fontWeight: 700,
-                                                            mt: 0.5,
-                                                            overflowWrap:
-                                                                'anywhere',
-                                                        }}
-                                                    >
-                                                        {value}
-                                                    </Typography>
-                                                </Box>
-                                            ))}
-                                        </Box>
-
-                                        <Box>
-                                            <Typography
-                                                variant="caption"
-                                                color="text.secondary"
-                                            >
-                                                Current address
-                                            </Typography>
-                                            <Typography
-                                                variant="body2"
-                                                sx={{
-                                                    mt: 0.75,
-                                                    fontWeight: 700,
-                                                }}
-                                            >
-                                                {
-                                                    selectedEmployee
-                                                        .personalInformation
-                                                        .address
-                                                }
-                                            </Typography>
-                                        </Box>
-
-                                        <Divider />
-
-                                        <Box>
-                                            <Typography
-                                                variant="subtitle1"
-                                                sx={{ fontWeight: 800 }}
-                                            >
-                                                Emergency Contact
                                             </Typography>
                                             <Box
                                                 sx={{
@@ -1320,379 +1638,166 @@ export default function Employees({
                                                         sm: 'repeat(2, 1fr)',
                                                     },
                                                     gap: 2,
-                                                    mt: 2,
                                                 }}
                                             >
                                                 {[
                                                     [
-                                                        'Contact name',
-                                                        selectedEmployee
-                                                            .personalInformation
-                                                            .emergencyName,
+                                                        'birthDate',
+                                                        'Birth Date',
+                                                        'date',
+                                                        'birth_date',
                                                     ],
                                                     [
+                                                        'startDate',
+                                                        'Start Date',
+                                                        'date',
+                                                        'start_date',
+                                                    ],
+                                                    [
+                                                        'gender',
+                                                        'Gender',
+                                                        'text',
+                                                        'gender',
+                                                    ],
+                                                    [
+                                                        'civilStatus',
+                                                        'Civil Status',
+                                                        'text',
+                                                        'civil_status',
+                                                    ],
+                                                    [
+                                                        'phone',
+                                                        'Phone Number',
+                                                        'tel',
+                                                        'phone',
+                                                    ],
+                                                    [
+                                                        'address',
+                                                        'Current Address',
+                                                        'text',
+                                                        'address',
+                                                    ],
+                                                    [
+                                                        'emergencyName',
+                                                        'Emergency Contact Name',
+                                                        'text',
+                                                        'emergency_contact_name',
+                                                    ],
+                                                    [
+                                                        'emergencyRelationship',
                                                         'Relationship',
-                                                        selectedEmployee
-                                                            .personalInformation
-                                                            .emergencyRelationship,
+                                                        'text',
+                                                        'emergency_contact_relationship',
                                                     ],
                                                     [
-                                                        'Contact phone',
-                                                        selectedEmployee
-                                                            .personalInformation
-                                                            .emergencyPhone,
+                                                        'emergencyPhone',
+                                                        'Emergency Contact Phone',
+                                                        'tel',
+                                                        'emergency_contact_phone',
                                                     ],
                                                     [
-                                                        'Contact address',
-                                                        selectedEmployee
-                                                            .personalInformation
-                                                            .emergencyAddress ||
-                                                            'Not provided',
+                                                        'emergencyAddress',
+                                                        'Emergency Contact Address',
+                                                        'text',
+                                                        'emergency_contact_address',
                                                     ],
-                                                ].map(([label, value]) => (
-                                                    <Box key={label}>
-                                                        <Typography
-                                                            variant="caption"
-                                                            color="text.secondary"
-                                                        >
-                                                            {label}
-                                                        </Typography>
-                                                        <Typography
-                                                            variant="body2"
-                                                            sx={{
-                                                                mt: 0.5,
-                                                                fontWeight: 700,
-                                                            }}
-                                                        >
-                                                            {value}
-                                                        </Typography>
-                                                    </Box>
-                                                ))}
+                                                ].map(
+                                                    ([
+                                                        field,
+                                                        label,
+                                                        type,
+                                                        errorKey,
+                                                    ]) => (
+                                                        <TextField
+                                                            key={field}
+                                                            label={label}
+                                                            type={type}
+                                                            value={
+                                                                employeeEditForm[
+                                                                    field as keyof EmployeeEditForm
+                                                                ]
+                                                            }
+                                                            onChange={(event) =>
+                                                                updateEmployeeEditField(
+                                                                    field as keyof EmployeeEditForm,
+                                                                    event.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            error={Boolean(
+                                                                employeeEditErrors[
+                                                                    errorKey
+                                                                ],
+                                                            )}
+                                                            helperText={
+                                                                employeeEditErrors[
+                                                                    errorKey
+                                                                ]
+                                                            }
+                                                            slotProps={
+                                                                type === 'date'
+                                                                    ? {
+                                                                          inputLabel:
+                                                                              {
+                                                                                  shrink: true,
+                                                                              },
+                                                                      }
+                                                                    : undefined
+                                                            }
+                                                        />
+                                                    ),
+                                                )}
                                             </Box>
-                                        </Box>
-                                    </Stack>
-                                ) : (
-                                    <Alert severity="info">
-                                        This account does not have a linked
-                                        personal information record yet.
-                                    </Alert>
-                                )
-                            ) : employeeEditForm && canManageEmployees ? (
-                                <Stack spacing={3}>
-                                    <Box>
-                                        <Typography
-                                            variant="subtitle1"
-                                            sx={{ fontWeight: 800 }}
+                                        </Stack>
+                                    ) : null}
+                                </DialogContent>
+                                <DialogActions sx={{ px: 3.5, pb: 2.5 }}>
+                                    {['Agent', 'Team Leader'].includes(
+                                        selectedEmployee.position,
+                                    ) && (
+                                        <Button
+                                            component="a"
+                                            href={`/management/employees/${selectedEmployee.id}/training-profile`}
+                                            variant="outlined"
                                         >
-                                            Account & Employee Editor
-                                        </Typography>
-                                        <Typography
-                                            variant="body2"
-                                            color="text.secondary"
-                                        >
-                                            Changes are saved to the linked
-                                            account and personal information.
-                                        </Typography>
-                                    </Box>
-
-                                    <Box
-                                        sx={{
-                                            display: 'grid',
-                                            gridTemplateColumns: {
-                                                xs: '1fr',
-                                                sm: 'repeat(2, 1fr)',
-                                            },
-                                            gap: 2,
-                                        }}
-                                    >
-                                        <TextField
-                                            label="Full Name"
-                                            value={employeeEditForm.fullName}
-                                            onChange={(event) =>
-                                                updateEmployeeEditField(
-                                                    'fullName',
-                                                    event.target.value,
-                                                )
-                                            }
-                                            error={Boolean(
-                                                employeeEditErrors.full_name,
-                                            )}
-                                            helperText={
-                                                employeeEditErrors.full_name
-                                            }
-                                        />
-                                        <TextField
-                                            select
-                                            label="Position"
-                                            value={employeeEditForm.position}
-                                            onChange={(event) =>
-                                                updateEmployeeEditField(
-                                                    'position',
-                                                    event.target.value,
-                                                )
-                                            }
-                                            error={Boolean(
-                                                employeeEditErrors.position,
-                                            )}
-                                            helperText={
-                                                employeeEditErrors.position ||
-                                                (employeeEditForm.position !==
-                                                selectedEmployee.position
-                                                    ? 'Role changes clear incompatible team assignments. Use Team Assigning to set new responsibilities.'
-                                                    : undefined)
-                                            }
-                                        >
-                                            {positions.map((option) => (
-                                                <MenuItem
-                                                    key={option}
-                                                    value={option}
-                                                >
-                                                    {option}
-                                                </MenuItem>
-                                            ))}
-                                        </TextField>
-                                        <TextField
-                                            label="Email Address"
-                                            type="email"
-                                            value={employeeEditForm.email}
-                                            onChange={(event) =>
-                                                updateEmployeeEditField(
-                                                    'email',
-                                                    event.target.value,
-                                                )
-                                            }
-                                            error={Boolean(
-                                                employeeEditErrors.email,
-                                            )}
-                                            helperText={
-                                                employeeEditErrors.email
-                                            }
-                                        />
-                                        <TextField
-                                            select
-                                            label="Employment Status"
-                                            value={employeeEditForm.status}
-                                            onChange={(event) =>
-                                                updateEmployeeEditField(
-                                                    'status',
-                                                    event.target.value,
-                                                )
-                                            }
-                                            error={Boolean(
-                                                employeeEditErrors.status,
-                                            )}
-                                        >
-                                            {[
-                                                ['active', 'Active'],
-                                                ['suspended', 'Suspended'],
-                                                ['floating', 'Floating'],
-                                                ['resigned', 'Resigned'],
-                                                ['terminated', 'Terminated'],
-                                            ].map(([value, label]) => (
-                                                <MenuItem
-                                                    key={value}
-                                                    value={value}
-                                                >
-                                                    {label}
-                                                </MenuItem>
-                                            ))}
-                                        </TextField>
-                                    </Box>
-
-                                    {employeeEditForm.status !== 'active' && (
-                                        <Alert severity="warning">
-                                            Saving this status immediately
-                                            disables this employee&apos;s login
-                                            credentials.
-                                        </Alert>
+                                            Training & Performance
+                                        </Button>
                                     )}
-
-                                    <TextField
-                                        label="Renew Password"
-                                        type="password"
-                                        value={employeeEditForm.newPassword}
-                                        onChange={(event) =>
-                                            updateEmployeeEditField(
-                                                'newPassword',
-                                                event.target.value,
-                                            )
-                                        }
-                                        error={Boolean(
-                                            employeeEditErrors.new_password,
+                                    {employeeModalTab === 1 &&
+                                        canManageEmployees && (
+                                            <Button
+                                                variant="contained"
+                                                onClick={saveEmployeeChanges}
+                                                disabled={
+                                                    employeeEditProcessing
+                                                }
+                                            >
+                                                {employeeEditProcessing
+                                                    ? 'Saving...'
+                                                    : 'Save Changes'}
+                                            </Button>
                                         )}
-                                        helperText={
-                                            employeeEditErrors.new_password ??
-                                            'Leave blank to keep the current password. Minimum 8 characters.'
+                                    <Button
+                                        variant={
+                                            employeeModalTab === 0
+                                                ? 'contained'
+                                                : 'outlined'
                                         }
-                                    />
-
-                                    <Divider />
-                                    <Typography
-                                        variant="subtitle1"
-                                        sx={{ fontWeight: 800 }}
+                                        onClick={() =>
+                                            setSelectedEmployee(null)
+                                        }
                                     >
-                                        Personal Information
-                                    </Typography>
-                                    <Box
-                                        sx={{
-                                            display: 'grid',
-                                            gridTemplateColumns: {
-                                                xs: '1fr',
-                                                sm: 'repeat(2, 1fr)',
-                                            },
-                                            gap: 2,
-                                        }}
-                                    >
-                                        {[
-                                            [
-                                                'birthDate',
-                                                'Birth Date',
-                                                'date',
-                                                'birth_date',
-                                            ],
-                                            [
-                                                'startDate',
-                                                'Start Date',
-                                                'date',
-                                                'start_date',
-                                            ],
-                                            [
-                                                'gender',
-                                                'Gender',
-                                                'text',
-                                                'gender',
-                                            ],
-                                            [
-                                                'civilStatus',
-                                                'Civil Status',
-                                                'text',
-                                                'civil_status',
-                                            ],
-                                            [
-                                                'phone',
-                                                'Phone Number',
-                                                'tel',
-                                                'phone',
-                                            ],
-                                            [
-                                                'address',
-                                                'Current Address',
-                                                'text',
-                                                'address',
-                                            ],
-                                            [
-                                                'emergencyName',
-                                                'Emergency Contact Name',
-                                                'text',
-                                                'emergency_contact_name',
-                                            ],
-                                            [
-                                                'emergencyRelationship',
-                                                'Relationship',
-                                                'text',
-                                                'emergency_contact_relationship',
-                                            ],
-                                            [
-                                                'emergencyPhone',
-                                                'Emergency Contact Phone',
-                                                'tel',
-                                                'emergency_contact_phone',
-                                            ],
-                                            [
-                                                'emergencyAddress',
-                                                'Emergency Contact Address',
-                                                'text',
-                                                'emergency_contact_address',
-                                            ],
-                                        ].map(
-                                            ([
-                                                field,
-                                                label,
-                                                type,
-                                                errorKey,
-                                            ]) => (
-                                                <TextField
-                                                    key={field}
-                                                    label={label}
-                                                    type={type}
-                                                    value={
-                                                        employeeEditForm[
-                                                            field as keyof EmployeeEditForm
-                                                        ]
-                                                    }
-                                                    onChange={(event) =>
-                                                        updateEmployeeEditField(
-                                                            field as keyof EmployeeEditForm,
-                                                            event.target.value,
-                                                        )
-                                                    }
-                                                    error={Boolean(
-                                                        employeeEditErrors[
-                                                            errorKey
-                                                        ],
-                                                    )}
-                                                    helperText={
-                                                        employeeEditErrors[
-                                                            errorKey
-                                                        ]
-                                                    }
-                                                    slotProps={
-                                                        type === 'date'
-                                                            ? {
-                                                                  inputLabel: {
-                                                                      shrink: true,
-                                                                  },
-                                                              }
-                                                            : undefined
-                                                    }
-                                                />
-                                            ),
-                                        )}
-                                    </Box>
-                                </Stack>
-                            ) : null}
-                        </DialogContent>
-                        <DialogActions sx={{ px: 3.5, pb: 2.5 }}>
-                            {['Agent', 'Team Leader'].includes(
-                                selectedEmployee.position,
-                            ) && (
-                                <Button
-                                    component="a"
-                                    href={`/management/employees/${selectedEmployee.id}/training-profile`}
-                                    variant="outlined"
-                                >
-                                    Training & Performance
-                                </Button>
-                            )}
-                            {employeeModalTab === 1 && canManageEmployees && (
-                                <Button
-                                    variant="contained"
-                                    onClick={saveEmployeeChanges}
-                                    disabled={employeeEditProcessing}
-                                >
-                                    {employeeEditProcessing
-                                        ? 'Saving...'
-                                        : 'Save Changes'}
-                                </Button>
-                            )}
-                            <Button
-                                variant={
-                                    employeeModalTab === 0
-                                        ? 'contained'
-                                        : 'outlined'
-                                }
-                                onClick={() => setSelectedEmployee(null)}
-                            >
-                                Close
-                            </Button>
-                        </DialogActions>
-                    </>
-                )}
-            </Dialog>
-
+                                        Close
+                                    </Button>
+                                </DialogActions>
+                            </>
+                        )}
+                    </Dialog>
+                </>
+            )}
             <Dialog
                 open={createEmployeeOpen}
-                onClose={() => setCreateEmployeeOpen(false)}
+                onClose={closeOnboarding}
                 fullWidth
                 maxWidth="sm"
                 slotProps={{
@@ -1778,7 +1883,9 @@ export default function Employees({
                                         fontWeight: 750,
                                     }}
                                 >
-                                    Add New Employee
+                                    {onboardingOnly
+                                        ? 'Add Trainee'
+                                        : 'Add New Employee'}
                                 </Typography>
                                 <Typography
                                     variant="body2"
@@ -1792,7 +1899,7 @@ export default function Employees({
                             </Box>
                         </Stack>
                         <IconButton
-                            onClick={() => setCreateEmployeeOpen(false)}
+                            onClick={closeOnboarding}
                             aria-label="Close add employee dialog"
                             sx={{
                                 position: 'absolute',
@@ -1901,7 +2008,11 @@ export default function Employees({
                                 <TextField
                                     size="small"
                                     label="Employee ID"
-                                    value={nextEmployeeId}
+                                    value={
+                                        position === 'Trainee'
+                                            ? nextTraineeId
+                                            : nextEmployeeId
+                                    }
                                     fullWidth
                                     slotProps={{
                                         input: { readOnly: true },
@@ -1911,7 +2022,11 @@ export default function Employees({
                                 <TextField
                                     size="small"
                                     label="Account Username"
-                                    value={nextEmployeeId}
+                                    value={
+                                        position === 'Trainee'
+                                            ? nextTraineeId
+                                            : nextEmployeeId
+                                    }
                                     fullWidth
                                     slotProps={{
                                         input: { readOnly: true },
@@ -1938,6 +2053,7 @@ export default function Employees({
                                     size="small"
                                     select
                                     label="Position"
+                                    disabled={onboardingOnly}
                                     value={position}
                                     onChange={(event) =>
                                         setPosition(event.target.value)
@@ -1953,15 +2069,44 @@ export default function Employees({
                                     ))}
                                 </TextField>
 
+                                {position === 'Trainee' && (
+                                    <TextField
+                                        select
+                                        size="small"
+                                        required
+                                        fullWidth
+                                        label="Training campaign"
+                                        value={trainingCampaignId}
+                                        onChange={(event) =>
+                                            setTrainingCampaignId(
+                                                event.target.value,
+                                            )
+                                        }
+                                        helperText="Select the campaign this trainee will train for."
+                                    >
+                                        {trainingCampaigns.map((campaign) => (
+                                            <MenuItem
+                                                key={campaign.id}
+                                                value={campaign.id}
+                                            >
+                                                {campaign.name}
+                                            </MenuItem>
+                                        ))}
+                                    </TextField>
+                                )}
                                 <TextField
                                     size="small"
                                     label="Temporary Password"
-                                    value={nextEmployeeId}
+                                    value={
+                                        position === 'Trainee'
+                                            ? nextTraineeId
+                                            : nextEmployeeId
+                                    }
                                     fullWidth
                                     slotProps={{
                                         input: { readOnly: true },
                                     }}
-                                    helperText="Must be changed after first sign-in"
+                                    helperText="The temporary password matches the assigned username and is emailed with the credentials. Change it after first sign-in."
                                     sx={{ gridColumn: { sm: '1 / -1' } }}
                                 />
                             </Box>
@@ -2518,13 +2663,18 @@ export default function Employees({
                             <Button
                                 variant="outlined"
                                 color="inherit"
-                                onClick={() => setCreateEmployeeOpen(false)}
+                                onClick={closeOnboarding}
                             >
                                 Cancel
                             </Button>
                             <Button
                                 variant="contained"
-                                disabled={!fullName.trim() || !position}
+                                disabled={
+                                    !fullName.trim() ||
+                                    !position ||
+                                    (position === 'Trainee' &&
+                                        !trainingCampaignId)
+                                }
                                 onClick={() => setEmployeeStep(1)}
                             >
                                 Continue to Personal Information

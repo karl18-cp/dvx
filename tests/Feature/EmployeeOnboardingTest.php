@@ -11,6 +11,66 @@ class EmployeeOnboardingTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_welcome_email_goes_to_new_employee_with_matching_temporary_password(): void
+    {
+        config(['mail.default' => 'smtp', 'mail.mailers.smtp.username' => 'sender@example.test', 'mail.mailers.smtp.password' => 'test-only', 'app.url' => 'https://dvx.test']);
+        \Illuminate\Support\Facades\Mail::fake();
+        $admin = User::factory()->create(['username' => 'DVX001', 'role' => 'admin']);
+        $this->actingAs($admin)->post(route('employees.store'), $this->payload())->assertRedirect(route('employees'));
+        $employee = User::where('username', 'DVX002')->firstOrFail();
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\EmployeeWelcome::class, function ($mail) use ($employee) {
+            $this->assertTrue($mail->hasTo('jamie@divertex.test'));
+            $this->assertSame('DVX002', $mail->employeeId);
+            $this->assertTrue(Hash::check($mail->temporaryPassword, $employee->password));
+            $this->assertSame($employee->username, $mail->temporaryPassword);
+            $this->assertSame('https://dvx.test/login', $mail->loginUrl);
+            $this->assertStringContainsString('Password &amp; security', $mail->render());
+            $this->assertNotNull($employee->faceCredential);
+
+            return true;
+        });
+        \Illuminate\Support\Facades\Mail::assertSentCount(1);
+    }
+
+    public function test_failed_welcome_email_keeps_account_and_reports_failure_without_exposing_credentials(): void
+    {
+        config(['mail.default' => 'smtp', 'mail.mailers.smtp.username' => 'sender@example.test', 'mail.mailers.smtp.password' => 'test-only']);
+        \Illuminate\Support\Facades\Mail::shouldReceive('to')->once()->with('jamie@divertex.test')->andReturnSelf();
+        \Illuminate\Support\Facades\Mail::shouldReceive('send')->once()->andThrow(new \RuntimeException('SMTP unavailable'));
+        $admin = User::factory()->create(['username' => 'DVX001', 'role' => 'admin']);
+        $this->actingAs($admin)->post(route('employees.store'), $this->payload())->assertRedirect()->assertSessionHas('status', fn ($message) => str_contains($message, 'welcome email could not be sent'));
+        $employee = User::where('username', 'DVX002')->firstOrFail();
+        $this->assertNotNull($employee->personalInformation);
+        $this->assertNotNull($employee->faceCredential);
+    }
+
+    public function test_invalid_onboarding_never_sends_credentials(): void
+    {
+        config(['mail.default' => 'smtp', 'mail.mailers.smtp.username' => 'sender@example.test', 'mail.mailers.smtp.password' => 'test-only']);
+        \Illuminate\Support\Facades\Mail::fake();
+        $admin = User::factory()->create(['username' => 'DVX001', 'role' => 'admin']);
+        $this->actingAs($admin)->post(route('employees.store'), $this->payload(['face_descriptor' => []]))->assertSessionHasErrors('face_descriptor');
+        \Illuminate\Support\Facades\Mail::assertNothingSent();
+        $this->assertDatabaseCount('users', 1);
+    }
+
+    public function test_trainee_onboarding_requires_an_active_campaign_and_enrolls_their_face(): void
+    {
+        $admin = User::factory()->create(['username' => 'DVX001', 'role' => 'admin']);
+        $campaign = \App\Models\Campaign::create(['name' => 'Trainee campaign', 'abbreviation' => 'TC', 'is_active' => false]);
+        $this->actingAs($admin)->post(route('employees.store'), $this->payload(['position' => 'Trainee']))->assertSessionHasErrors('training_campaign_id');
+        $this->post(route('employees.store'), $this->payload(['position' => 'Trainee', 'training_campaign_id' => $campaign->id]))->assertSessionHasErrors('training_campaign_id');
+        $campaign->update(['is_active' => true]);
+        $this->post(route('employees.store'), $this->payload(['position' => 'Trainee', 'training_campaign_id' => $campaign->id, 'training_status' => 'graduated']))->assertRedirect(route('trainees'));
+        $trainee = User::where('username', 'DVXTR001')->firstOrFail();
+        $this->assertSame('trainee', $trainee->role);
+        $this->assertTrue(Hash::check('DVXTR001', $trainee->password));
+        $this->assertSame('in_training', $trainee->training_status);
+        $this->assertEquals($campaign->id, $trainee->training_campaign_id);
+        $this->assertNotNull($trainee->faceCredential);
+        $this->assertNotNull($trainee->personalInformation);
+    }
+
     public function test_an_admin_can_atomically_create_an_employee_with_personal_and_face_records(): void
     {
         $admin = User::factory()->create([

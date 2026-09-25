@@ -48,7 +48,7 @@ class CoachingManagementController extends Controller
                 'upcoming' => (clone $base)->whereNot('status', 'completed')->whereBetween('follow_up_date', [today(), today()->addDays(7)])->count(),
             ],
             'filters' => $filters,
-            'employees' => User::query()->whereIn('role', ['agent', 'team_leader'])->where('status', 'active')->when($request->user()->role === 'team_leader', fn ($q) => $q->whereHas('teamMembership', fn ($m) => $m->whereIn('team_id', $access->teamIds($request->user()))))->orderBy('name')->get(['id', 'name', 'username']),
+            'employees' => User::query()->whereIn('role', ['agent', 'team_leader', 'trainee'])->where('status', 'active')->when($request->user()->role === 'team_leader', fn ($q) => $q->whereHas('teamMembership', fn ($m) => $m->whereIn('team_id', $access->teamIds($request->user()))))->orderBy('name')->get(['id', 'name', 'username']),
             'coaches' => User::query()->whereIn('role', ['admin', 'manager'])->when($request->user()->role === 'team_leader', fn ($q) => $q->whereIn('id', (clone $base)->select('coach_id')))->orderBy('name')->get(['id', 'name']),
             'skills' => AssessmentSkill::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'assessments' => Assessment::query()->when($request->user()->role === 'team_leader', fn ($q) => $q->whereIn('id', (clone $base)->select('assessment_id')))->orderBy('title')->get(['id', 'title']),
@@ -74,8 +74,8 @@ class CoachingManagementController extends Controller
         }
         $employee = User::query()->with('teamMembership.team.campaign:id,name')->findOrFail($data['employee_id']);
         $team = $employee->teamMembership?->team;
-        $campaign = $team?->campaign;
-        abort_unless($team && $campaign, 422, 'The employee must belong to a Campaign team before coaching can be created.');
+        $campaign = $employee->role === 'trainee' ? $employee->trainingCampaign : $team?->campaign;
+        abort_unless(($team || $employee->role === 'trainee') && $campaign, 422, 'The employee must belong to a Campaign team before coaching can be created.');
         $record = DB::transaction(function () use ($data, $request, $campaign, $team) {
             $materialIds = $data['material_ids'] ?? [];
             unset($data['material_ids']);
@@ -148,7 +148,7 @@ class CoachingManagementController extends Controller
     private function validated(Request $request, bool $creating): array
     {
         return $request->validate([
-            'employee_id' => [$creating ? 'required' : 'sometimes', 'integer', Rule::exists('users', 'id')->whereIn('role', ['agent', 'team_leader'])],
+            'employee_id' => [$creating ? 'required' : 'sometimes', 'integer', Rule::exists('users', 'id')->whereIn('role', ['agent', 'team_leader', 'trainee'])],
             'type' => ['required', Rule::in(CoachingOptions::TYPES)],
             'skill_id' => ['nullable', 'integer', 'exists:assessment_skills,id'],
             'assessment_id' => ['nullable', 'integer', 'exists:assessments,id'],

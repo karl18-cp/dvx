@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class JobApplicationController extends Controller
 {
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, \App\Services\RecruitmentEmailService $email): RedirectResponse
     {
         $data = $request->validate([
             'first_name' => ['required', 'string', 'max:100'], 'last_name' => ['required', 'string', 'max:100'],
@@ -30,7 +30,15 @@ class JobApplicationController extends Controller
             $path = $file->store('job-applications/'.now()->format('Y/m'), 'local');
             $data = [...$data, 'resume_disk' => 'local', 'resume_path' => $path, 'resume_original_name' => $file->getClientOriginalName(), 'resume_mime' => $file->getMimeType(), 'resume_size' => $file->getSize()];
         }
-        JobApplication::query()->create($data);
+        try {
+            $application = JobApplication::query()->create($data);
+        } catch (\Throwable $exception) {
+            if (isset($data['resume_path'])) {
+                Storage::disk('local')->delete($data['resume_path']);
+            }
+            throw $exception;
+        }
+        $email->send($application);
 
         return back()->with('status', 'Application submitted successfully. Our recruitment team will review your information.');
     }
@@ -44,7 +52,14 @@ class JobApplicationController extends Controller
             ->when($filters['position'] ?? null, fn ($q, $value) => $q->where('position', $value));
 
         return Inertia::render('applicants/index', [
-            'applications' => $query->latest()->paginate(15)->withQueryString(), 'filters' => $filters,
+            'emailConfigured' => app(\App\Services\RecruitmentEmailService::class)->configured(),
+            'recruitmentInbox' => config('recruitment.inbox'),
+            'statusMessage' => $request->session()->get('status'),
+            'applications' => $query->latest()->paginate(15)->withQueryString()->through(function ($application) {
+                $application->setAttribute('scheduled_start', $application->scheduled_start_at?->setTimezone('Asia/Manila')->format('Y-m-d\TH:i'));
+
+                return $application;
+            }), 'filters' => $filters,
             'summary' => ['total' => JobApplication::query()->count(), 'for_screening' => JobApplication::query()->where('applicant_stage', 'for_screening')->count(), 'for_final_interview' => JobApplication::query()->where('applicant_stage', 'for_final_interview')->count(), 'passed' => JobApplication::query()->where('applicant_stage', 'passed')->count()],
         ]);
     }
@@ -55,16 +70,44 @@ class JobApplicationController extends Controller
             'applicant_stage' => ['required', Rule::in(['for_screening', 'for_final_interview', 'passed', 'failed'])],
             'internal_notes' => ['nullable', 'string', 'max:5000'],
             'applicant_update' => ['nullable', 'string', 'max:3000'],
+            'scheduled_start' => ['required_if:applicant_stage,for_screening,for_final_interview,passed', 'nullable', 'date_format:Y-m-d\TH:i'],
         ]);
+        $scheduledStart = $data['applicant_stage'] !== 'failed'
+            ? \Carbon\CarbonImmutable::createFromFormat('Y-m-d\TH:i', $data['scheduled_start'], 'Asia/Manila')->startOfMinute()->utc()
+            : null;
+        unset($data['scheduled_start']);
         $legacyStatuses = match ($data['applicant_stage']) {
             'for_screening' => ['screening_status' => 'pending', 'interview_status' => 'pending', 'application_status' => 'in_review'],
             'for_final_interview' => ['screening_status' => 'passed', 'interview_status' => 'scheduled', 'application_status' => 'for_interview'],
             'passed' => ['screening_status' => 'passed', 'interview_status' => 'passed', 'application_status' => 'hired'],
             'failed' => ['screening_status' => 'failed', 'interview_status' => 'failed', 'application_status' => 'rejected'],
         };
-        $application->update([...$data, ...$legacyStatuses, 'reviewed_by' => $request->user()->id, 'reviewed_at' => now()]);
+        \Illuminate\Support\Facades\DB::transaction(function () use ($application, $data, $legacyStatuses, $request, $scheduledStart) {
+            $locked = JobApplication::query()->lockForUpdate()->findOrFail($application->id);
+            $publicChanged = $locked->applicant_stage !== $data['applicant_stage']
+                || $locked->scheduled_start_at?->getTimestamp() !== $scheduledStart?->getTimestamp()
+                || (array_key_exists('applicant_update', $data) && (string) $locked->applicant_update !== (string) $data['applicant_update']);
+            $locked->fill([...$data, ...$legacyStatuses, 'reviewed_by' => $request->user()->id, 'reviewed_at' => now()]);
+            $locked->forceFill(['scheduled_start_at' => $scheduledStart]);
+            if ($publicChanged) {
+                $locked->forceFill(['applicant_email_pending' => true]);
+            }
+            $locked->save();
+        });
+        $sent = app(\App\Services\RecruitmentEmailService::class)->sendStatusUpdate($application);
 
-        return back()->with('status', 'Applicant status updated.');
+        return back()->with('status', 'Applicant review saved. '.match ($sent) {
+            true => 'The applicant notification was accepted by the mail server.',
+            false => 'The applicant email could not be sent. The status is saved; check email settings and save this review again to retry.',
+            null => 'No applicant-facing change was made, so no duplicate email was sent.',
+        });
+    }
+
+    public function retryEmail(JobApplication $application, \App\Services\RecruitmentEmailService $email): RedirectResponse
+    {
+        $sent = $email->send($application);
+
+        return back()->with('status', $sent ? 'Application email accepted by the mail server.' : 'Email could not be sent. Check the Gmail SMTP configuration. The application is still saved.');
     }
 
     public function resume(JobApplication $application): BinaryFileResponse

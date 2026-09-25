@@ -13,12 +13,14 @@ import {
     Camera,
     Clock,
     Coffee,
+    History,
     LogIn,
     LogOut,
     ScanFace,
     X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import AttendanceRecordsDialog from '@/components/attendance-records-dialog';
 
 type Action = 'time_in' | 'lunch_out' | 'lunch_in' | 'time_out';
 type ClockState = {
@@ -85,6 +87,7 @@ export default function MyAttendance({
     clock: ClockState;
 }) {
     const [clock, setClock] = useState(initial);
+    const [recordsOpen, setRecordsOpen] = useState(false);
     const [action, setAction] = useState<Action | null>(null);
     const [challenge, setChallenge] = useState<Challenge | null>(null);
     const [frames, setFrames] = useState<string[]>([]);
@@ -329,18 +332,27 @@ export default function MyAttendance({
         <>
             <Head title="My Attendance" />
             <main className="min-w-0 flex-1 space-y-6 p-4 sm:p-6 lg:p-8">
-                <header>
-                    <p className="text-xs font-bold tracking-[0.2em] text-red-700 uppercase">
-                        Your workday
-                    </p>
-                    <h1 className="mt-2 flex items-center gap-3 text-3xl font-bold">
-                        <Clock className="text-red-700" />
-                        My Attendance
-                    </h1>
-                    <p className="mt-2 text-sm text-slate-500">
-                        Time in and out with your enrolled face. Breaks use a
-                        regular button.
-                    </p>
+                <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                    <div>
+                        <p className="text-xs font-bold tracking-[0.2em] text-red-700 uppercase">
+                            Your workday
+                        </p>
+                        <h1 className="mt-2 flex items-center gap-3 text-3xl font-bold">
+                            <Clock className="text-red-700" />
+                            My Attendance
+                        </h1>
+                        <p className="mt-2 text-sm text-slate-500">
+                            Time in and out with your enrolled face. Breaks use
+                            a regular button.
+                        </p>
+                    </div>
+                    <Button
+                        variant="contained"
+                        onClick={() => setRecordsOpen(true)}
+                        startIcon={<History size={18} />}
+                    >
+                        View my attendance records
+                    </Button>
                 </header>
                 {error && (
                     <Alert severity="error" onClose={() => setError('')}>
@@ -445,6 +457,12 @@ export default function MyAttendance({
                     </p>
                 </section>
             </main>
+            {recordsOpen && (
+                <AttendanceRecordsDialog
+                    initialDate={clock.date}
+                    onClose={() => setRecordsOpen(false)}
+                />
+            )}
             <Dialog
                 keepMounted
                 open={!!action}

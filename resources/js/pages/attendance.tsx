@@ -24,10 +24,12 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { DateTimeField } from '@/components/date-time-field';
+import EmployeeAvatar from '@/components/employee-avatar';
 
 type AttendanceEmployee = {
     id: number;
     employeeId: string;
+    avatar: string;
     name: string;
     position: string;
     team: string | null;
@@ -57,6 +59,7 @@ type AttendanceEmployee = {
 type AttendanceProps = {
     canOverride: boolean;
     isTeamLeader: boolean;
+    attendanceScope: 'mine' | 'team';
     attendanceDate: string;
     employees: AttendanceEmployee[];
 };
@@ -94,14 +97,6 @@ const statusOptions = [
     ['on_leave', 'On Leave'],
     ['not_recorded', 'Not Recorded'],
 ];
-
-const initialsFor = (name: string) =>
-    name
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((part) => part[0])
-        .join('')
-        .toUpperCase();
 
 const formatTime = (value: string | null) =>
     value
@@ -158,6 +153,7 @@ const statusPresentation: Record<string, { label: string; classes: string }> = {
 export default function Attendance({
     canOverride,
     isTeamLeader,
+    attendanceScope,
     attendanceDate,
     employees,
 }: AttendanceProps) {
@@ -190,7 +186,23 @@ export default function Attendance({
     const last = Math.min(page * perPage, filtered.length);
 
     const changeDate = (date: string) => {
-        router.get('/attendance', { date }, { preserveState: true });
+        router.get(
+            '/attendance',
+            { date, scope: attendanceScope },
+            { preserveState: true },
+        );
+    };
+
+    const changeScope = (scope: 'mine' | 'team') => {
+        setSearch('');
+        setRole('all');
+        setStatus('all');
+        setPage(1);
+        router.get(
+            '/attendance',
+            { date: attendanceDate, scope },
+            { preserveState: true, preserveScroll: true },
+        );
     };
 
     const saveTimeOverride = () => {
@@ -232,7 +244,9 @@ export default function Attendance({
                             </p>
                             <h1 className="text-3xl font-bold tracking-[-0.03em] text-[#1b1d2a] sm:text-4xl">
                                 {isTeamLeader
-                                    ? 'Team Attendance'
+                                    ? attendanceScope === 'mine'
+                                        ? 'My Attendance Records'
+                                        : 'Team Attendance'
                                     : 'Daily Attendance'}
                             </h1>
                             <p className="mt-2 text-sm text-[#777b8e] sm:text-base">
@@ -266,6 +280,38 @@ export default function Attendance({
                             }}
                         />
                     </header>
+
+                    {isTeamLeader && (
+                        <div
+                            className="flex flex-wrap gap-3"
+                            role="group"
+                            aria-label="Attendance view"
+                        >
+                            <Button
+                                variant={
+                                    attendanceScope === 'team'
+                                        ? 'contained'
+                                        : 'outlined'
+                                }
+                                aria-pressed={attendanceScope === 'team'}
+                                onClick={() => changeScope('team')}
+                            >
+                                Team attendance
+                            </Button>
+                            <Button
+                                variant={
+                                    attendanceScope === 'mine'
+                                        ? 'contained'
+                                        : 'outlined'
+                                }
+                                aria-pressed={attendanceScope === 'mine'}
+                                startIcon={<History size={17} />}
+                                onClick={() => changeScope('mine')}
+                            >
+                                My attendance records
+                            </Button>
+                        </div>
+                    )}
 
                     <section className="overflow-hidden rounded-3xl border border-[#e6e7ec] bg-white shadow-[0_16px_50px_rgba(25,27,38,0.06)]">
                         <div className="border-b border-[#ededf1] p-5 sm:p-6">
@@ -400,13 +446,13 @@ export default function Attendance({
                                             >
                                                 <td className="px-5 py-4">
                                                     <div className="flex items-center gap-3">
-                                                        <div
-                                                            className={`grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br ${['from-emerald-500 to-amber-400', 'from-sky-500 to-indigo-500', 'from-fuchsia-500 to-rose-400', 'from-orange-500 to-red-500'][index % 4]} text-sm font-bold text-white`}
-                                                        >
-                                                            {initialsFor(
-                                                                employee.name,
-                                                            )}
-                                                        </div>
+                                                        <EmployeeAvatar
+                                                            name={employee.name}
+                                                            avatar={
+                                                                employee.avatar
+                                                            }
+                                                            fallbackClassName={`bg-gradient-to-br ${['from-emerald-500 to-amber-400', 'from-sky-500 to-indigo-500', 'from-fuchsia-500 to-rose-400', 'from-orange-500 to-red-500'][index % 4]} text-sm text-white`}
+                                                        />
                                                         <span className="max-w-44 font-semibold text-[#252735]">
                                                             {employee.name}
                                                         </span>

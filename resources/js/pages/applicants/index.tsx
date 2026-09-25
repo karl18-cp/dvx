@@ -1,10 +1,13 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import {
+    Alert,
     Dialog,
     DialogActions,
     DialogContent,
     DialogTitle,
+    IconButton,
 } from '@mui/material';
+import { X } from 'lucide-react';
 import { useState } from 'react';
 
 type Application = {
@@ -22,7 +25,10 @@ type Application = {
     applicant_stage: string;
     internal_notes?: string;
     applicant_update?: string;
+    scheduled_start?: string;
     created_at: string;
+    recruitment_email_status: string;
+    applicant_email_pending: boolean;
 };
 type Page = {
     data: Application[];
@@ -36,23 +42,33 @@ export default function Applicants({
     applications,
     filters,
     summary,
+    emailConfigured,
+    recruitmentInbox,
+    statusMessage,
 }: {
     applications: Page;
     filters: Record<string, string>;
     summary: Record<string, number>;
+    emailConfigured: boolean;
+    recruitmentInbox: string;
+    statusMessage?: string;
 }) {
     const [selected, setSelected] = useState<Application | null>(null);
+    const [sendingEmail, setSendingEmail] = useState<number | null>(null);
     const form = useForm({
         applicant_stage: 'for_screening',
         internal_notes: '',
         applicant_update: '',
+        scheduled_start: '',
     });
     const open = (a: Application) => {
+        form.clearErrors();
         setSelected(a);
         form.setData({
             applicant_stage: a.applicant_stage,
             internal_notes: a.internal_notes || '',
             applicant_update: a.applicant_update || '',
+            scheduled_start: a.scheduled_start || '',
         });
     };
     const filter = (key: string, value: string) =>
@@ -76,6 +92,33 @@ export default function Applicants({
                         outcomes.
                     </p>
                 </header>
+                <a
+                    href="/careers"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block font-semibold text-red-700"
+                >
+                    Open application form ↗
+                </a>
+                <a
+                    href="/applicant-portal"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ml-4 inline-block font-semibold text-red-700"
+                >
+                    Open applicant progress portal ↗
+                </a>
+                {statusMessage && (
+                    <Alert severity="info">{statusMessage}</Alert>
+                )}
+                {!emailConfigured && (
+                    <Alert severity="warning">
+                        Email delivery to {recruitmentInbox} is not configured
+                        yet. Applications and résumés are saved here. Add the
+                        Gmail App Password in the server settings, then use Send
+                        email below.
+                    </Alert>
+                )}
                 <section className="grid gap-3 sm:grid-cols-4">
                     {[
                         ['Total Applicants', summary.total],
@@ -128,6 +171,7 @@ export default function Applicants({
                                     'Contact',
                                     'Experience',
                                     'Status',
+                                    'Recruitment email',
                                     'Applied',
                                     'Action',
                                 ].map((h) => (
@@ -160,6 +204,52 @@ export default function Applicants({
                                     </td>
                                     <td className="p-3">
                                         <Badge value={a.applicant_stage} />
+                                        {a.applicant_email_pending && (
+                                            <p className="mt-2 text-xs text-amber-700">
+                                                Applicant email pending — open
+                                                Review and save to retry.
+                                            </p>
+                                        )}
+                                    </td>
+                                    <td className="p-3">
+                                        <p>
+                                            {a.recruitment_email_status ===
+                                            'sent'
+                                                ? 'Accepted by mail server'
+                                                : a.recruitment_email_status.replaceAll(
+                                                      '_',
+                                                      ' ',
+                                                  )}
+                                        </p>
+                                        {a.recruitment_email_status !==
+                                            'sent' && (
+                                            <button
+                                                type="button"
+                                                disabled={
+                                                    !emailConfigured ||
+                                                    sendingEmail !== null
+                                                }
+                                                className="mt-2 font-bold text-red-700 disabled:opacity-50"
+                                                onClick={() => {
+                                                    setSendingEmail(a.id);
+                                                    router.post(
+                                                        `/management/applicants/${a.id}/email`,
+                                                        {},
+                                                        {
+                                                            preserveScroll: true,
+                                                            onFinish: () =>
+                                                                setSendingEmail(
+                                                                    null,
+                                                                ),
+                                                        },
+                                                    );
+                                                }}
+                                            >
+                                                {sendingEmail === a.id
+                                                    ? 'Sending…'
+                                                    : 'Send email'}
+                                            </button>
+                                        )}
                                     </td>
                                     <td className="p-3">
                                         {new Date(
@@ -213,8 +303,27 @@ export default function Applicants({
                     fullWidth
                     maxWidth="sm"
                 >
-                    <DialogTitle>Review Applicant</DialogTitle>
+                    <DialogTitle className="flex items-center justify-between">
+                        Review Applicant
+                        <IconButton
+                            aria-label="Close applicant review"
+                            disabled={form.processing}
+                            onClick={() => setSelected(null)}
+                        >
+                            <X />
+                        </IconButton>
+                    </DialogTitle>
                     <DialogContent>
+                        <p className="mb-4 text-sm text-slate-500">
+                            Saving a changed status or applicant-visible update
+                            emails the applicant. Internal notes are never
+                            included.
+                        </p>
+                        {Object.values(form.errors).map((error) => (
+                            <Alert key={error} severity="error">
+                                {error}
+                            </Alert>
+                        ))}
                         {selected && (
                             <div className="mt-2 space-y-4">
                                 <div className="rounded-xl bg-slate-50 p-4">
@@ -246,9 +355,44 @@ export default function Applicants({
                                     value={form.data.applicant_stage}
                                     options={stages}
                                     onChange={(v) =>
-                                        form.setData('applicant_stage', v)
+                                        form.setData({
+                                            ...form.data,
+                                            applicant_stage: v,
+                                            scheduled_start:
+                                                v === form.data.applicant_stage
+                                                    ? form.data.scheduled_start
+                                                    : '',
+                                        })
                                     }
                                 />
+                                {form.data.applicant_stage !== 'failed' && (
+                                    <label className="block font-bold">
+                                        {form.data.applicant_stage === 'passed'
+                                            ? 'Training start'
+                                            : form.data.applicant_stage ===
+                                                'for_final_interview'
+                                              ? 'Final interview start'
+                                              : 'Screening interview start'}{' '}
+                                        <span className="text-red-700">*</span>
+                                        <input
+                                            type="datetime-local"
+                                            required
+                                            value={form.data.scheduled_start}
+                                            onChange={(event) =>
+                                                form.setData(
+                                                    'scheduled_start',
+                                                    event.target.value,
+                                                )
+                                            }
+                                            className="mt-2 w-full rounded-lg border border-slate-300 p-3"
+                                        />
+                                        <span className="mt-1 block text-xs font-normal text-slate-500">
+                                            Philippine time (Asia/Manila).
+                                            Included in the applicant email and
+                                            portal.
+                                        </span>
+                                    </label>
+                                )}
                                 <label className="block font-bold">
                                     Update Visible to Applicant
                                     <textarea
@@ -285,14 +429,12 @@ export default function Applicants({
                     </DialogContent>
                     <DialogActions>
                         <button
-                            className="px-4 py-2"
-                            onClick={() => setSelected(null)}
-                        >
-                            Cancel
-                        </button>
-                        <button
                             className="rounded-lg bg-red-700 px-4 py-2 font-bold text-white"
-                            disabled={form.processing}
+                            disabled={
+                                form.processing ||
+                                (form.data.applicant_stage !== 'failed' &&
+                                    !form.data.scheduled_start)
+                            }
                             onClick={() =>
                                 selected &&
                                 form.put(

@@ -27,6 +27,7 @@ class EmployeeController extends Controller
                 'id' => $user->id,
                 'employeeId' => $user->username,
                 'name' => $user->name,
+                'avatar' => $user->avatar,
                 'email' => $user->email,
                 'position' => $this->positionLabel($user->role),
                 'status' => $user->status,
@@ -48,7 +49,10 @@ class EmployeeController extends Controller
             ]);
 
         return Inertia::render('employees', [
-            'nextEmployeeId' => $this->nextEmployeeId(),
+            'trainingCampaigns' => \App\Models\Campaign::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'createTrainee' => $request->query('create') === 'trainee',
+            'nextEmployeeId' => app(\App\Services\EmployeeNumberService::class)->next(),
+            'nextTraineeId' => app(\App\Services\EmployeeNumberService::class)->next(trainee: true),
             'canManageEmployees' => $request->user()?->role === 'admin',
             'statusMessage' => $request->session()->get('status'),
             'employees' => $employees,
@@ -63,12 +67,12 @@ class EmployeeController extends Controller
         ]);
     }
 
-    public function store(StoreEmployeeRequest $request): RedirectResponse
+    public function store(StoreEmployeeRequest $request, \App\Services\EmployeeWelcomeService $welcome): RedirectResponse
     {
         $data = $request->validated();
 
-        DB::transaction(function () use ($data): void {
-            $employeeId = $this->nextEmployeeId(lockForUpdate: true);
+        $user = DB::transaction(function () use ($data): User {
+            $employeeId = app(\App\Services\EmployeeNumberService::class)->next(trainee: $data['position'] === 'Trainee', allocate: true);
 
             $role = $this->roleValue($data['position']);
 
@@ -79,6 +83,10 @@ class EmployeeController extends Controller
                 'role' => $role,
                 'password' => $employeeId,
             ]);
+
+            if ($role === 'trainee') {
+                $user->forceFill(['training_campaign_id' => $data['training_campaign_id'], 'training_status' => 'in_training'])->save();
+            }
 
             $user->personalInformation()->create([
                 'email' => $data['email'],
@@ -103,9 +111,17 @@ class EmployeeController extends Controller
                 'consented_at' => now(),
                 'enrolled_at' => now(),
             ]);
+
+            return $user;
         }, attempts: 3);
 
-        return to_route('employees')->with('status', 'Employee account created successfully.');
+        $sent = $welcome->send($user, $user->username);
+
+        return to_route($data['position'] === 'Trainee' ? 'trainees' : 'employees')->with('status',
+            'Account created successfully. '.($sent
+                ? 'The welcome email with login credentials was accepted by the mail server for '.$user->email.'. '
+                : 'The welcome email could not be sent. Check the email settings; the employee can use Forgot your password to set a password once delivery is available. ')
+            .'Assign a campaign schedule to enable attendance.');
     }
 
     public function update(UpdateEmployeeRequest $request, User $employee, EmployeeRoleService $roles): RedirectResponse
@@ -149,26 +165,6 @@ class EmployeeController extends Controller
         $roles->change($request->user(), $employee, $this->roleValue($data['position']));
 
         return to_route('employees')->with('status', $employee->name.' is now '.$data['position'].'.');
-    }
-
-    private function nextEmployeeId(bool $lockForUpdate = false): string
-    {
-        $query = User::query()->where('username', 'like', 'DVX%');
-
-        if ($lockForUpdate) {
-            $query->lockForUpdate();
-        }
-
-        $highestEmployeeNumber = $query
-            ->pluck('username')
-            ->map(function (?string $username): int {
-                return preg_match('/^DVX(\d+)$/i', (string) $username, $matches)
-                    ? (int) $matches[1]
-                    : 0;
-            })
-            ->max() ?? 0;
-
-        return sprintf('DVX%03d', max(2, $highestEmployeeNumber + 1));
     }
 
     private function positionLabel(string $role): string

@@ -1,17 +1,21 @@
+import { usePage } from '@inertiajs/react';
 import { AppContent } from '@/components/app-content';
 import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AppSidebarHeader } from '@/components/app-sidebar-header';
 import { DiverTextUnreadProvider } from '@/components/divertext-unread-provider';
 import { MessageWidget } from '@/components/message-widget';
+import type { Auth } from '@/types';
 import type { AppLayoutProps } from '@/types';
 
 export default function AppSidebarLayout({
     children,
     breadcrumbs = [],
 }: AppLayoutProps) {
+    const { auth } = usePage<{ auth: Auth }>().props;
+
     return (
-        <DiverTextUnreadProvider>
+        <DiverTextUnreadProvider enabled={auth.user.role !== 'trainee'}>
             <AppShell variant="sidebar">
                 <AppSidebar />
                 <AppContent
@@ -21,7 +25,7 @@ export default function AppSidebarLayout({
                     <AppSidebarHeader breadcrumbs={breadcrumbs} />
                     {children}
                 </AppContent>
-                <MessageWidget />
+                {auth.user.role !== 'trainee' && <MessageWidget />}
             </AppShell>
         </DiverTextUnreadProvider>
     );

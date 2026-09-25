@@ -17,7 +17,7 @@ class ApplicantStatusController extends Controller
             'expires_at' => now()->addMinutes(10)->timestamp,
         ]);
 
-        return response()->json(['question' => "What is {$first} + {$second}?"]);
+        return response()->json(['question' => "What is {$first} + {$second}?"])->header('Cache-Control', 'private, no-store');
     }
 
     public function lookup(Request $request): JsonResponse
@@ -47,10 +47,12 @@ class ApplicantStatusController extends Controller
                 'position' => $application->position,
                 'applicant_stage' => $application->applicant_stage,
                 'applicant_update' => $application->applicant_update,
+                'scheduled_start_at' => $application->scheduled_start_at?->toIso8601String(),
+                'schedule_label' => $application->scheduleLabel(),
                 'applied_at' => $application->created_at->toDateString(),
                 'updated_at' => $application->reviewed_at?->toIso8601String() ?? $application->updated_at->toIso8601String(),
             ],
-        ]);
+        ])->header('Cache-Control', 'private, no-store');
     }
 
     private function normalizePhone(string $phone): string

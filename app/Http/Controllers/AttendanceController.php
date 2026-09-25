@@ -19,7 +19,8 @@ class AttendanceController extends Controller
         $actor = $request->user()->fresh();
         abort_unless($actor->status === 'active' && in_array($actor->role, ['admin', 'team_leader'], true), 403);
         $teamLeader = $actor->role === 'team_leader';
-        $visibleIds = $teamLeader ? app(TeamLeaderWorkspaceService::class)->members($actor)->pluck('users.id')->push($actor->id)->unique()->all() : null;
+        $ownRecords = $teamLeader && $request->input('scope') === 'mine';
+        $visibleIds = $teamLeader ? ($ownRecords ? [$actor->id] : app(TeamLeaderWorkspaceService::class)->members($actor)->pluck('users.id')->push($actor->id)->unique()->all()) : null;
 
         $request->validate(['date' => ['nullable', 'date_format:Y-m-d']]);
         $date = $request->input('date') ?? now(config('attendance.timezone'))->toDateString();
@@ -49,6 +50,7 @@ class AttendanceController extends Controller
                     'id' => $user->id,
                     'employeeId' => $user->username,
                     'name' => $user->name,
+                    'avatar' => $user->avatar,
                     'position' => $this->positionLabel($user->role),
                     'team' => $user->team,
                     'status' => $record?->status ?? ($schedule['rest_day'] ? 'rest_day' : 'not_recorded'),
@@ -68,6 +70,7 @@ class AttendanceController extends Controller
         return Inertia::render('attendance', [
             'canOverride' => ! $teamLeader,
             'isTeamLeader' => $teamLeader,
+            'attendanceScope' => $ownRecords ? 'mine' : 'team',
             'attendanceDate' => $date,
             'employees' => $employees,
         ]);
