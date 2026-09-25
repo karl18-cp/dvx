@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Services\EmployeeRoleService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -21,14 +22,7 @@ class StoreEmployeeRequest extends FormRequest
             'full_name' => ['required', 'string', 'max:100'],
             'position' => [
                 'required',
-                Rule::in([
-                    'Admin',
-                    'Team Leader',
-                    'Agent',
-                    'IT Admin',
-                    'IT Support',
-                    'IT Developer',
-                ]),
+                Rule::in(array_keys(EmployeeRoleService::ROLES)),
             ],
             'email' => ['required', 'email:rfc', 'max:255', 'unique:users,email'],
             'birth_date' => ['required', 'date', 'before:today'],

@@ -1,6 +1,11 @@
 import { Head, router } from '@inertiajs/react';
 import {
     Box,
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
     IconButton,
     MenuItem,
     Tab,
@@ -9,7 +14,7 @@ import {
     Tooltip,
 } from '@mui/material';
 import { Check, Inbox, RefreshCw, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 type BaseRequest = {
     id: number;
@@ -28,10 +33,14 @@ type TimeRequest = BaseRequest & {
 };
 
 type LeaveRequest = BaseRequest & {
+    initialApproval: string;
+    leaderName: string | null;
+    leaderNotes: string | null;
     startDate: string;
     endDate: string;
     numberOfDays: number;
     leaveType: string;
+    isPaid: boolean;
 };
 
 type RequestsProps = {
@@ -75,8 +84,15 @@ export default function Requests({
 }: RequestsProps) {
     const [tab, setTab] = useState(0);
     const [status, setStatus] = useState('needs_review');
-    const [page, setPage] = useState(1);
+    const [requestedPage, setPage] = useState(1);
     const [processingKey, setProcessingKey] = useState<string | null>(null);
+    const [review, setReview] = useState<{
+        type: RequestType;
+        item: BaseRequest;
+        decision: 'approved' | 'rejected';
+    } | null>(null);
+    const [isPaid, setIsPaid] = useState(false);
+    const [reviewError, setReviewError] = useState('');
     const perPage = 20;
     const activeType = requestTypes[tab];
     const requestGroups = useMemo(
@@ -91,22 +107,40 @@ export default function Requests({
         (item) => status === 'all' || item.status === status,
     );
     const pages = Math.ceil(filtered.length / perPage);
+    const page = Math.max(1, Math.min(requestedPage, pages));
     const visible = filtered.slice((page - 1) * perPage, page * perPage);
-
-    useEffect(() => setPage(1), [status, tab]);
 
     const decide = (
         type: RequestType,
         item: BaseRequest,
         decision: 'approved' | 'rejected',
     ) => {
+        setReview({ type, item, decision });
+        setIsPaid(type === 'leave' && (item as LeaveRequest).isPaid);
+        setReviewError('');
+    };
+
+    const submitReview = () => {
+        if (!review) {
+            return;
+        }
+
+        const { type, item, decision } = review;
         const key = `${type}-${item.id}-${decision}`;
         setProcessingKey(key);
         router.patch(
             `/requests/${type}/${item.id}/status`,
-            { status: decision },
+            {
+                status: decision,
+                ...(type === 'leave' ? { is_paid: isPaid } : {}),
+            },
             {
                 preserveScroll: true,
+                onSuccess: () => setReview(null),
+                onError: (errors) =>
+                    setReviewError(
+                        Object.values(errors)[0] ?? 'Unable to update request.',
+                    ),
                 onFinish: () => setProcessingKey(null),
             },
         );
@@ -155,9 +189,10 @@ export default function Requests({
                                     select
                                     size="small"
                                     value={status}
-                                    onChange={(event) =>
-                                        setStatus(event.target.value)
-                                    }
+                                    onChange={(event) => {
+                                        setStatus(event.target.value);
+                                        setPage(1);
+                                    }}
                                     sx={{
                                         minWidth: 180,
                                         '& .MuiOutlinedInput-root': {
@@ -196,7 +231,10 @@ export default function Requests({
 
                         <Tabs
                             value={tab}
-                            onChange={(_, value: number) => setTab(value)}
+                            onChange={(_, value: number) => {
+                                setTab(value);
+                                setPage(1);
+                            }}
                             sx={{
                                 px: 2.5,
                                 borderBottom: '1px solid',
@@ -277,7 +315,13 @@ export default function Requests({
                                             statusStyle[item.status] ??
                                             statusStyle.needs_review;
                                         const leave = item as LeaveRequest;
+                                        const initialBlocked =
+                                            activeType === 'leave' &&
+                                            ['pending', 'rejected'].includes(
+                                                leave.initialApproval,
+                                            );
                                         const timed = item as TimeRequest;
+
                                         return (
                                             <tr
                                                 key={item.id}
@@ -309,6 +353,11 @@ export default function Requests({
                                                         </td>
                                                         <td className="px-3 py-4 text-sm">
                                                             {leave.leaveType}
+                                                            <div className="mt-1 text-xs text-slate-500">
+                                                                {leave.isPaid
+                                                                    ? 'Paid'
+                                                                    : 'Unpaid'}
+                                                            </div>
                                                         </td>
                                                     </>
                                                 ) : (
@@ -325,6 +374,20 @@ export default function Requests({
                                                 )}
                                                 <td className="max-w-sm px-4 py-4 text-sm leading-5 text-[#4f5262]">
                                                     {item.reason}
+                                                    {activeType === 'leave' &&
+                                                        leave.initialApproval !==
+                                                            'not_required' && (
+                                                            <p className="mt-2 text-xs text-red-800">
+                                                                Team leader:{' '}
+                                                                {
+                                                                    leave.initialApproval
+                                                                }
+                                                                {leave.leaderName &&
+                                                                    ` · ${leave.leaderName}`}
+                                                                {leave.leaderNotes &&
+                                                                    ` — ${leave.leaderNotes}`}
+                                                            </p>
+                                                        )}
                                                 </td>
                                                 <td className="px-4 py-4 text-sm">
                                                     {item.team ??
@@ -346,38 +409,47 @@ export default function Requests({
                                                     {item.status ===
                                                     'needs_review' ? (
                                                         <div className="flex gap-2">
-                                                            <Tooltip title="Approve">
-                                                                <IconButton
-                                                                    disabled={
-                                                                        processingKey !==
-                                                                        null
-                                                                    }
-                                                                    onClick={() =>
-                                                                        decide(
-                                                                            activeType,
-                                                                            item,
-                                                                            'approved',
-                                                                        )
-                                                                    }
-                                                                    sx={{
-                                                                        width: 34,
-                                                                        height: 34,
-                                                                        bgcolor:
-                                                                            '#eaf9f1',
-                                                                        color: '#079455',
-                                                                        '&:hover':
-                                                                            {
-                                                                                bgcolor:
-                                                                                    '#d6f3e3',
-                                                                            },
-                                                                    }}
-                                                                >
-                                                                    <Check
-                                                                        size={
-                                                                            18
+                                                            <Tooltip
+                                                                title={
+                                                                    initialBlocked
+                                                                        ? 'Team-leader approval required first'
+                                                                        : 'Approve'
+                                                                }
+                                                            >
+                                                                <span>
+                                                                    <IconButton
+                                                                        disabled={
+                                                                            initialBlocked ||
+                                                                            processingKey !==
+                                                                                null
                                                                         }
-                                                                    />
-                                                                </IconButton>
+                                                                        onClick={() =>
+                                                                            decide(
+                                                                                activeType,
+                                                                                item,
+                                                                                'approved',
+                                                                            )
+                                                                        }
+                                                                        sx={{
+                                                                            width: 34,
+                                                                            height: 34,
+                                                                            bgcolor:
+                                                                                '#eaf9f1',
+                                                                            color: '#079455',
+                                                                            '&:hover':
+                                                                                {
+                                                                                    bgcolor:
+                                                                                        '#d6f3e3',
+                                                                                },
+                                                                        }}
+                                                                    >
+                                                                        <Check
+                                                                            size={
+                                                                                18
+                                                                            }
+                                                                        />
+                                                                    </IconButton>
+                                                                </span>
                                                             </Tooltip>
                                                             <Tooltip title="Reject">
                                                                 <IconButton
@@ -414,7 +486,31 @@ export default function Requests({
                                                             </Tooltip>
                                                         </div>
                                                     ) : (
-                                                        '—'
+                                                        <Button
+                                                            size="small"
+                                                            onClick={() =>
+                                                                decide(
+                                                                    activeType,
+                                                                    item,
+                                                                    item.status ===
+                                                                        'approved'
+                                                                        ? 'rejected'
+                                                                        : 'approved',
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                (initialBlocked &&
+                                                                    item.status !==
+                                                                        'approved') ||
+                                                                processingKey !==
+                                                                    null
+                                                            }
+                                                        >
+                                                            {item.status ===
+                                                            'approved'
+                                                                ? 'Revoke approval'
+                                                                : 'Review again'}
+                                                        </Button>
                                                     )}
                                                 </td>
                                             </tr>
@@ -467,6 +563,77 @@ export default function Requests({
                     </section>
                 </div>
             </main>
+            <Dialog
+                open={review !== null}
+                onClose={() => !processingKey && setReview(null)}
+                fullWidth
+                maxWidth="sm"
+                slotProps={{ paper: { sx: { borderRadius: 3 } } }}
+            >
+                <DialogTitle sx={{ fontWeight: 800 }}>
+                    {review?.decision === 'approved' ? 'Approve' : 'Reject'}{' '}
+                    {review?.type} request
+                </DialogTitle>
+                <DialogContent>
+                    <p className="mb-4 text-sm text-slate-600">
+                        {review?.item.requester} · {review?.item.employeeId}
+                    </p>
+                    {review?.type === 'leave' &&
+                    review.decision === 'approved' ? (
+                        <>
+                            <TextField
+                                select
+                                fullWidth
+                                label="Leave payment"
+                                value={isPaid ? 'paid' : 'unpaid'}
+                                onChange={(event) =>
+                                    setIsPaid(event.target.value === 'paid')
+                                }
+                                sx={{ mt: 1 }}
+                            >
+                                <MenuItem value="paid">Paid leave</MenuItem>
+                                <MenuItem value="unpaid">Unpaid leave</MenuItem>
+                            </TextField>
+                            <p className="mt-3 text-sm text-slate-600">
+                                Paid leave credits scheduled working hours after
+                                deducting the scheduled break. Rest days and
+                                days without a schedule receive no hours. Unpaid
+                                leave receives zero hours.
+                            </p>
+                        </>
+                    ) : (
+                        <p className="text-sm text-slate-600">
+                            {review?.decision === 'approved'
+                                ? `Approve clock-out at ${(review?.item as TimeRequest)?.requestTime} for the shift starting ${(review?.item as TimeRequest)?.requestDate}? Actual attendance is still required; hours exclude breaks.`
+                                : 'Rejecting this request removes its approval from attendance and recalculates the hours.'}
+                        </p>
+                    )}
+                    {reviewError && (
+                        <p role="alert" className="mt-4 text-sm text-red-700">
+                            {reviewError}
+                        </p>
+                    )}
+                </DialogContent>
+                <DialogActions sx={{ p: 3 }}>
+                    <Button
+                        disabled={!!processingKey}
+                        onClick={() => setReview(null)}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="contained"
+                        disabled={!!processingKey}
+                        onClick={submitReview}
+                    >
+                        {processingKey
+                            ? 'Saving…'
+                            : review?.decision === 'approved'
+                              ? 'Approve request'
+                              : 'Reject request'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </>
     );
 }

@@ -7,6 +7,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -32,9 +33,18 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $updated_at
  */
 #[Fillable(['username', 'name', 'email', 'role', 'status', 'team', 'schedule', 'password'])]
-#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
+#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token', 'profile_photo_path'])]
 class User extends Authenticatable implements PasskeyUser
 {
+    protected $appends = ['avatar'];
+
+    public function getAvatarAttribute(): string
+    {
+        return $this->profile_photo_path
+            ? route('profile-photo.show', ['user' => $this->id, 'v' => substr(hash('sha256', $this->profile_photo_path), 0, 12)], false)
+            : '';
+    }
+
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
 
@@ -81,6 +91,11 @@ class User extends Authenticatable implements PasskeyUser
     public function teamMembership(): HasOne
     {
         return $this->hasOne(TeamMember::class);
+    }
+
+    public function campaignSchedule(): BelongsTo
+    {
+        return $this->belongsTo(CampaignSchedule::class);
     }
 
     /** @return HasMany<TeamLeaderAssignment, $this> */

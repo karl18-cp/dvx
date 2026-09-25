@@ -22,7 +22,6 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import { useEffect, useRef, useState } from 'react';
 import {
     BriefcaseBusiness,
     Camera,
@@ -46,12 +45,14 @@ import {
     UserRound,
     UserX,
 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 type EmployeesProps = {
     nextEmployeeId: string;
     employees: Employee[];
     stats: EmployeeStats;
     canManageEmployees: boolean;
+    statusMessage?: string | null;
 };
 
 type EmployeeStats = {
@@ -104,6 +105,7 @@ type FaceDetectionStatus =
 
 const positions = [
     'Admin',
+    'Manager',
     'Team Leader',
     'Agent',
     'IT Admin',
@@ -133,7 +135,12 @@ export default function Employees({
     employees,
     stats,
     canManageEmployees,
+    statusMessage,
 }: EmployeesProps) {
+    const [roleEmployee, setRoleEmployee] = useState<Employee | null>(null);
+    const [newRole, setNewRole] = useState('');
+    const [roleError, setRoleError] = useState('');
+    const [roleProcessing, setRoleProcessing] = useState(false);
     const [createEmployeeOpen, setCreateEmployeeOpen] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
         null,
@@ -262,6 +269,7 @@ export default function Employees({
             setFaceDetectionMessage(
                 'Confirm the employee consent before starting face enrollment.',
             );
+
             return;
         }
 
@@ -454,6 +462,7 @@ export default function Employees({
     useEffect(() => {
         if (!selectedEmployee) {
             setEmployeeEditForm(null);
+
             return;
         }
 
@@ -543,6 +552,11 @@ export default function Employees({
             <Head title="Employees" />
 
             <main className="min-h-full bg-[#f7f7fa] p-4 sm:p-6 lg:p-8">
+                {statusMessage && (
+                    <Alert severity="success" className="mb-4">
+                        {statusMessage}
+                    </Alert>
+                )}
                 <div className="mx-auto max-w-[1500px] space-y-7">
                     <header className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
                         <div>
@@ -647,6 +661,7 @@ export default function Employees({
                                                     'resigned',
                                                     'terminated',
                                                 ] as const;
+
                                                 return filters[
                                                     (filters.indexOf(current) +
                                                         1) %
@@ -779,6 +794,35 @@ export default function Employees({
                                                 </td>
                                                 <td className="px-5 py-4 text-sm font-medium text-[#4d5060]">
                                                     {employee.position}
+                                                    {canManageEmployees && (
+                                                        <button
+                                                            type="button"
+                                                            aria-label={`Change role for ${employee.name}`}
+                                                            onKeyDown={(
+                                                                event,
+                                                            ) =>
+                                                                event.stopPropagation()
+                                                            }
+                                                            onClick={(
+                                                                event,
+                                                            ) => {
+                                                                event.stopPropagation();
+                                                                setRoleEmployee(
+                                                                    employee,
+                                                                );
+                                                                setNewRole(
+                                                                    employee.position,
+                                                                );
+                                                                setRoleError(
+                                                                    '',
+                                                                );
+                                                            }}
+                                                            className="mt-1.5 flex items-center gap-1 rounded-md border border-[#ae1b20]/30 px-2 py-1 text-xs font-bold text-[#ae1b20] hover:bg-red-50"
+                                                        >
+                                                            <UserCheck className="size-3.5" />
+                                                            Change Role
+                                                        </button>
+                                                    )}
                                                 </td>
                                                 <td className="px-5 py-4">
                                                     <span className="inline-flex rounded-full bg-[#eef6ff] px-3 py-1.5 text-xs font-semibold text-[#3472b9]">
@@ -910,6 +954,109 @@ export default function Employees({
                     </section>
                 </div>
             </main>
+
+            <Dialog
+                open={roleEmployee !== null}
+                onClose={() => {
+                    if (!roleProcessing) {
+                        setRoleEmployee(null);
+                    }
+                }}
+                fullWidth
+                maxWidth="sm"
+                aria-labelledby="change-role-title"
+            >
+                <DialogTitle id="change-role-title">
+                    Change employee role
+                </DialogTitle>
+                <DialogContent>
+                    <p className="mb-4 text-sm text-slate-600">
+                        <strong>{roleEmployee?.name}</strong> (
+                        {roleEmployee?.employeeId}) currently has the{' '}
+                        <strong>{roleEmployee?.position}</strong> role.
+                    </p>
+                    <TextField
+                        select
+                        fullWidth
+                        label="New role"
+                        value={newRole}
+                        disabled={roleProcessing}
+                        onChange={(event) => {
+                            setNewRole(event.target.value);
+                            setRoleError('');
+                        }}
+                        error={!!roleError}
+                        helperText={
+                            roleError ||
+                            'The new role takes effect on the employee’s next page request.'
+                        }
+                        sx={{ mt: 1 }}
+                    >
+                        {positions.map((role) => (
+                            <MenuItem key={role} value={role}>
+                                {role}
+                            </MenuItem>
+                        ))}
+                    </TextField>
+                    {roleEmployee &&
+                        newRole !== roleEmployee.position &&
+                        (roleEmployee.position === 'Agent' ||
+                            roleEmployee.position === 'Team Leader') && (
+                            <Alert severity="info" sx={{ mt: 2 }}>
+                                Existing agent or team-leader assignments that
+                                no longer match this role will be removed. Use
+                                Team Assigning to set their new team
+                                responsibilities.
+                            </Alert>
+                        )}
+                    {newRole === 'Team Leader' &&
+                        newRole !== roleEmployee?.position && (
+                            <p className="mt-3 text-sm text-slate-600">
+                                After saving, this employee will appear in the
+                                Team Leaders list in Team Assigning.
+                            </p>
+                        )}
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2.5 }}>
+                    <Button
+                        disabled={roleProcessing}
+                        onClick={() => setRoleEmployee(null)}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="contained"
+                        disabled={
+                            roleProcessing ||
+                            !newRole ||
+                            newRole === roleEmployee?.position
+                        }
+                        onClick={() => {
+                            if (!roleEmployee) {
+                                return;
+                            }
+
+                            router.patch(
+                                `/employees/${roleEmployee.id}/role`,
+                                { position: newRole },
+                                {
+                                    preserveScroll: true,
+                                    onStart: () => setRoleProcessing(true),
+                                    onError: (errors) =>
+                                        setRoleError(
+                                            errors.position ??
+                                                Object.values(errors).join(' '),
+                                        ),
+                                    onSuccess: () => setRoleEmployee(null),
+                                    onFinish: () => setRoleProcessing(false),
+                                },
+                            );
+                        }}
+                    >
+                        {roleProcessing ? 'Saving…' : 'Save Role'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             <Dialog
                 open={selectedEmployee !== null}
@@ -1287,6 +1434,13 @@ export default function Employees({
                                             error={Boolean(
                                                 employeeEditErrors.position,
                                             )}
+                                            helperText={
+                                                employeeEditErrors.position ||
+                                                (employeeEditForm.position !==
+                                                selectedEmployee.position
+                                                    ? 'Role changes clear incompatible team assignments. Use Team Assigning to set new responsibilities.'
+                                                    : undefined)
+                                            }
                                         >
                                             {positions.map((option) => (
                                                 <MenuItem

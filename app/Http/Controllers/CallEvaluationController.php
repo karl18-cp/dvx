@@ -39,10 +39,10 @@ class CallEvaluationController extends Controller
             'evaluations' => $query->latest('updated_at')->paginate(15)->withQueryString(),
             'filters' => $filters,
             'employees' => $this->employees()->when($request->user()->role === 'team_leader', fn ($employees) => $employees->filter(fn ($employee) => in_array($employee->teamMembership?->team_id, $access->teamIds($request->user()), true)))->values(),
-            'campaigns' => Campaign::query()->orderBy('name')->get(['id', 'name']),
+            'campaigns' => Campaign::query()->when($request->user()->role === 'team_leader', fn ($q) => $q->whereHas('teams', fn ($q) => $q->whereIn('teams.id', $access->teamIds($request->user()))))->orderBy('name')->get(['id', 'name']),
             'teams' => Team::query()->when($request->user()->role === 'team_leader', fn ($q) => $q->whereIn('id', $access->teamIds($request->user())))->orderBy('name')->get(['id', 'name', 'campaign_id']),
-            'scorecards' => CallEvaluationScorecard::query()->orderBy('name')->get(['id', 'name', 'status']),
-            'evaluators' => User::query()->whereIn('role', ['admin', 'manager'])->orderBy('name')->get(['id', 'name']),
+            'scorecards' => CallEvaluationScorecard::query()->when($request->user()->role === 'team_leader', fn ($q) => $q->whereIn('id', $access->scope(CallEvaluation::query(), $request->user())->select('scorecard_id')))->orderBy('name')->get(['id', 'name', 'status']),
+            'evaluators' => User::query()->whereIn('role', ['admin', 'manager'])->when($request->user()->role === 'team_leader', fn ($q) => $q->whereIn('id', $access->scope(CallEvaluation::query(), $request->user())->select('evaluator_id')))->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -80,7 +80,7 @@ class CallEvaluationController extends Controller
 
     public function show(Request $request, CallEvaluation $evaluation, CallEvaluationScoringService $scoring, QaAccessService $access): Response
     {
-        $access->authorizeTeam($request->user(), $evaluation->team_id);
+        $access->authorizeTeam($request->user(), $evaluation->team_id, $evaluation->employee_id);
         abort_unless($evaluation->status === 'submitted', 404);
         $evaluation->load(['employee:id,name,username', 'evaluator:id,name', 'criterionResults', 'coachingRecord:id,call_evaluation_id,status']);
 
@@ -145,7 +145,7 @@ class CallEvaluationController extends Controller
 
     public function recording(Request $request, CallEvaluation $evaluation, QaAccessService $access): BinaryFileResponse
     {
-        $access->authorizeTeam($request->user(), $evaluation->team_id);
+        $access->authorizeTeam($request->user(), $evaluation->team_id, $evaluation->employee_id);
         abort_unless($evaluation->status === 'submitted' || in_array($request->user()->role, ['admin', 'manager'], true), 404);
         abort_unless($evaluation->storage_disk && $evaluation->storage_key, 404);
         $disk = Storage::disk($evaluation->storage_disk);
@@ -156,7 +156,7 @@ class CallEvaluationController extends Controller
 
     public function document(Request $request, CallEvaluation $evaluation, QaAccessService $access): BinaryFileResponse
     {
-        $access->authorizeTeam($request->user(), $evaluation->team_id);
+        $access->authorizeTeam($request->user(), $evaluation->team_id, $evaluation->employee_id);
         abort_unless($evaluation->status === 'submitted' || in_array($request->user()->role, ['admin', 'manager'], true), 404);
         abort_unless($evaluation->document_storage_disk && $evaluation->document_storage_key, 404);
         $disk = Storage::disk($evaluation->document_storage_disk);

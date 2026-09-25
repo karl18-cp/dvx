@@ -1,4 +1,4 @@
-import { Form, Link, usePage } from '@inertiajs/react';
+import { Form, usePage } from '@inertiajs/react';
 import {
     CalendarCheck,
     CalendarDays,
@@ -26,11 +26,18 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
+import DivertexLogo from '@/components/divertex-logo';
+import DivertexMark from '@/components/divertex-mark';
+import { DiverTextBadge } from '@/components/divertext-badge';
+import type { Navigation } from '@/components/page-link';
+import Link from '@/components/page-link';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
     Sidebar,
     SidebarContent,
     SidebarFooter,
     SidebarHeader,
+    useSidebar,
 } from '@/components/ui/sidebar';
 import { dashboard, logout } from '@/routes';
 import type { Auth } from '@/types';
@@ -45,12 +52,14 @@ type MenuItem = {
 
 const primaryItems: MenuItem[] = [
     { label: 'Dashboard', icon: LayoutDashboard, href: dashboard().url },
-    { label: 'Ranking', icon: Trophy },
+    { label: 'Announcements', icon: Megaphone, href: '/announcements' },
+    { label: 'Ranking', icon: Trophy, href: '/ranking' },
     { label: 'Attendance', icon: CalendarCheck, href: '/attendance' },
     { label: 'Requests', icon: Inbox, href: '/requests' },
-    { label: 'Task Tracker', icon: ListChecks },
-    { label: 'IT EOD Reports', icon: ClipboardCheck },
-    { label: 'DiverText', icon: MessagesSquare },
+    { label: 'My Forms', icon: FileText, href: '/my-forms' },
+    { label: 'Task Tracker', icon: ListChecks, href: '/task-tracker' },
+    { label: 'EOD Report', icon: ClipboardCheck, href: '/eod-reports' },
+    { label: 'DiverText', icon: MessagesSquare, href: '/divertext' },
     {
         label: 'Training & Assessments',
         icon: BookOpenCheck,
@@ -65,14 +74,22 @@ const managementItems: MenuItem[] = [
         icon: UserRoundPlus,
         href: '/management/applicants',
     },
-    { label: 'Campaign Schedules', icon: CalendarDays },
+    {
+        label: 'Campaign Schedules',
+        icon: CalendarDays,
+        href: '/campaign-schedules',
+    },
     { label: 'Employees', icon: Users, href: '/employees' },
     { label: 'Team Assigning', icon: UserRoundPlus, href: '/team-assigning' },
     { label: 'Team', icon: UsersRound, href: '/teams' },
     { label: 'Campaign', icon: Megaphone, href: '/campaigns' },
-    { label: 'Sanctions', icon: Gavel },
-    { label: 'Forms', icon: FileText },
-    { label: 'Satisfaction Results', icon: ClipboardList },
+    { label: 'Sanctions', icon: Gavel, href: '/sanctions' },
+    { label: 'Forms', icon: FileText, href: '/forms' },
+    {
+        label: 'Satisfaction Results',
+        icon: ClipboardList,
+        href: '/satisfaction-results',
+    },
 ];
 
 const coachingItem: MenuItem = {
@@ -167,23 +184,38 @@ function SidebarItem({
                   currentUrl === prefix || currentUrl.startsWith(`${prefix}/`),
           )
         : false;
-    const className = `flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition hover:bg-white/8 hover:text-white ${
+    const className = `flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition hover:bg-white/8 hover:text-white group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 ${
         active ? 'bg-white/12 text-white' : 'text-[#bcb7c7]'
     } ${nested ? 'pl-5' : ''}`;
 
     if (item.href) {
         return (
-            <Link href={item.href} className={className}>
+            <Link
+                href={item.href}
+                className={`relative ${className}`}
+                aria-label={item.label}
+                title={item.label}
+            >
                 <Icon className="size-[18px] shrink-0" />
-                <span>{item.label}</span>
+                <span className="group-data-[collapsible=icon]:hidden">
+                    {item.label}
+                </span>
+                {item.label === 'DiverText' && <DiverTextBadge />}
             </Link>
         );
     }
 
     return (
-        <button type="button" className={className}>
+        <button
+            type="button"
+            className={className}
+            aria-label={item.label}
+            title={item.label}
+        >
             <Icon className="size-[18px] shrink-0" />
-            <span>{item.label}</span>
+            <span className="group-data-[collapsible=icon]:hidden">
+                {item.label}
+            </span>
         </button>
     );
 }
@@ -212,17 +244,21 @@ function SidebarGroup({
                 onClick={onToggle}
                 aria-expanded={open}
                 aria-controls={id}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-[#d1ccd8] transition hover:bg-white/8 hover:text-white focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none"
+                aria-label={label}
+                title={label}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-[#d1ccd8] transition group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 hover:bg-white/8 hover:text-white focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none"
             >
-                <Icon className="size-[18px]" />
-                <span>{label}</span>
+                <Icon className="size-[18px] shrink-0" />
+                <span className="group-data-[collapsible=icon]:hidden">
+                    {label}
+                </span>
                 <ChevronDown
-                    className={`ml-auto size-4 transition-transform duration-200 ${open ? 'rotate-0' : '-rotate-90'}`}
+                    className={`ml-auto size-4 transition-transform duration-200 group-data-[collapsible=icon]:hidden ${open ? 'rotate-0' : '-rotate-90'}`}
                 />
             </button>
             <div
                 id={id}
-                className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
+                className={`grid transition-[grid-template-rows] duration-300 ease-in-out group-data-[collapsible=icon]:hidden ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
             >
                 <div className="overflow-hidden">
                     <div className="ml-5 space-y-0.5 border-l border-white/15 pl-2">
@@ -242,7 +278,8 @@ function SidebarGroup({
 }
 
 export function AppSidebar() {
-    const page = usePage<{ auth: Auth }>();
+    const { isMobile, setOpen } = useSidebar();
+    const page = usePage<{ auth: Auth; navigation?: Navigation }>();
     const { auth } = page.props;
     const [managementOpen, setManagementOpen] = useState(true);
     const [trainingOpen, setTrainingOpen] = useState(true);
@@ -254,38 +291,150 @@ export function AppSidebar() {
     return (
         <Sidebar
             collapsible="icon"
+            {...(!isMobile && {
+                onPointerEnter: (event) => {
+                    if (event.pointerType === 'mouse') {
+                        setOpen(true);
+                    }
+                },
+                onPointerLeave: (event) => {
+                    if (
+                        event.pointerType === 'mouse' &&
+                        !event.currentTarget.querySelector(':focus-visible')
+                    ) {
+                        setOpen(false);
+                    }
+                },
+                onFocusCapture: (event) => {
+                    if (event.target.matches(':focus-visible')) {
+                        setOpen(true);
+                    }
+                },
+                onBlurCapture: (event) => {
+                    if (
+                        !event.currentTarget.contains(event.relatedTarget) &&
+                        !event.currentTarget.matches(':hover')
+                    ) {
+                        setOpen(false);
+                    }
+                },
+            })}
             className="border-r border-white/10 [--sidebar-foreground:#f7f4fa] [--sidebar:#171326]"
         >
             <SidebarHeader className="h-32 items-center justify-center border-b border-white/10 bg-[#171326]">
                 <Link
                     href={dashboard()}
-                    className="flex h-[52px] w-[100px] items-center justify-center rounded-[50%] border-[3px] border-[#e63535] bg-[#a50d20] text-sm font-black tracking-[-0.08em] text-white italic"
+                    aria-label="Divertex dashboard"
+                    className="flex w-44 max-w-full items-center justify-center rounded-xl p-2 transition group-data-[collapsible=icon]:w-12 group-data-[collapsible=icon]:p-0 hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-400"
                 >
-                    DIVERTEX
+                    <DivertexMark className="hidden h-10 w-12 shrink-0 group-data-[collapsible=icon]:block" />
+                    <span className="w-full group-data-[collapsible=icon]:hidden">
+                        <DivertexLogo className="w-full" />
+                    </span>
                 </Link>
             </SidebarHeader>
 
-            <SidebarContent className="bg-[linear-gradient(180deg,#191426_0%,#28131d_62%,#401414_100%)] px-3 py-4">
+            <SidebarContent className="bg-[linear-gradient(180deg,#191426_0%,#28131d_62%,#401414_100%)] px-3 py-4 group-data-[collapsible=icon]:px-1">
                 <nav className="space-y-1">
-                    {primaryItems.map((item) => (
+                    {auth.user.role === 'team_leader' && (
                         <SidebarItem
-                            key={item.label}
-                            item={item}
-                            currentUrl={page.url}
+                            item={{
+                                label: 'My Attendance',
+                                icon: CalendarCheck,
+                                href: '/my-attendance',
+                            }}
+                            currentUrl={
+                                (
+                                    page.props.navigation?.currentPath ??
+                                    page.url
+                                ).split('?')[0]
+                            }
                         />
-                    ))}
+                    )}
+                    {auth.user.role === 'team_leader' && (
+                        <SidebarItem
+                            item={{
+                                label: 'My Team',
+                                icon: UsersRound,
+                                href: '/my-team',
+                            }}
+                            currentUrl={
+                                (
+                                    page.props.navigation?.currentPath ??
+                                    page.url
+                                ).split('?')[0]
+                            }
+                        />
+                    )}
+                    {primaryItems
+                        .filter(
+                            (item) =>
+                                !['Task Tracker', 'EOD Report'].includes(
+                                    item.label,
+                                ) ||
+                                ['admin', 'team_leader'].includes(
+                                    auth.user.role,
+                                ),
+                        )
+                        .map((item) => (
+                            <SidebarItem
+                                key={item.label}
+                                item={
+                                    ['agent', 'team_leader'].includes(
+                                        auth.user.role,
+                                    ) && item.href === '/requests'
+                                        ? {
+                                              ...item,
+                                              label: 'Leave Requests',
+                                              href: '/leave-requests',
+                                          }
+                                        : auth.user.role === 'team_leader' &&
+                                            item.href === '/attendance'
+                                          ? {
+                                                ...item,
+                                                label: 'Team Attendance',
+                                            }
+                                          : auth.user.role === 'admin' &&
+                                              item.href === '/my-coaching'
+                                            ? {
+                                                  ...item,
+                                                  label: 'Coaching Overview',
+                                              }
+                                            : item
+                                }
+                                currentUrl={
+                                    (
+                                        page.props.navigation?.currentPath ??
+                                        page.url
+                                    ).split('?')[0]
+                                }
+                            />
+                        ))}
 
                     {isManager && (
                         <>
                             <SidebarGroup
                                 label="Management"
                                 icon={Layers3}
-                                items={managementItems}
+                                items={managementItems.filter(
+                                    (item) =>
+                                        ![
+                                            '/sanctions',
+                                            '/forms',
+                                            '/satisfaction-results',
+                                        ].includes(item.href ?? '') ||
+                                        auth.user.role === 'admin',
+                                )}
                                 open={managementOpen}
                                 onToggle={() =>
                                     setManagementOpen((value) => !value)
                                 }
-                                currentUrl={page.url}
+                                currentUrl={
+                                    (
+                                        page.props.navigation?.currentPath ??
+                                        page.url
+                                    ).split('?')[0]
+                                }
                             />
                             <SidebarGroup
                                 label="Training & Development"
@@ -295,7 +444,12 @@ export function AppSidebar() {
                                 onToggle={() =>
                                     setTrainingOpen((value) => !value)
                                 }
-                                currentUrl={page.url}
+                                currentUrl={
+                                    (
+                                        page.props.navigation?.currentPath ??
+                                        page.url
+                                    ).split('?')[0]
+                                }
                             />
                         </>
                     )}
@@ -312,53 +466,93 @@ export function AppSidebar() {
                                       )
                             }
                             open={qualityOpen}
-                            onToggle={() =>
-                                setQualityOpen((value) => !value)
+                            onToggle={() => setQualityOpen((value) => !value)}
+                            currentUrl={
+                                (
+                                    page.props.navigation?.currentPath ??
+                                    page.url
+                                ).split('?')[0]
                             }
-                            currentUrl={page.url}
                         />
                     )}
                     {!isManager && isQaViewer && (
                         <SidebarItem
                             item={coachingItem}
-                            currentUrl={page.url}
+                            currentUrl={
+                                (
+                                    page.props.navigation?.currentPath ??
+                                    page.url
+                                ).split('?')[0]
+                            }
                         />
                     )}
 
                     <div className="pt-2">
                         <SidebarItem
                             item={{ label: 'Payroll', icon: ReceiptText }}
-                            currentUrl={page.url}
+                            currentUrl={
+                                (
+                                    page.props.navigation?.currentPath ??
+                                    page.url
+                                ).split('?')[0]
+                            }
                         />
                         <SidebarItem
-                            item={{ label: 'Settings', icon: Settings }}
-                            currentUrl={page.url}
+                            item={{
+                                label: 'Settings',
+                                icon: Settings,
+                                href: '/settings',
+                                activePrefixes: ['/settings/'],
+                            }}
+                            currentUrl={
+                                (
+                                    page.props.navigation?.currentPath ??
+                                    page.url
+                                ).split('?')[0]
+                            }
                         />
                     </div>
                 </nav>
             </SidebarContent>
 
-            <SidebarFooter className="border-t border-white/10 bg-[#401414] p-4 text-white">
-                <div className="mb-3 flex items-center gap-3">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#ed4328]">
-                        <UserCircle className="size-5" />
-                    </div>
-                    <div className="min-w-0">
+            <SidebarFooter className="border-t border-white/10 bg-[#401414] p-4 text-white group-data-[collapsible=icon]:p-1">
+                <div className="mb-3 flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
+                    <Link
+                        href="/settings/profile"
+                        aria-label="Edit your profile"
+                        className="shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-white"
+                    >
+                        <Avatar className="size-10">
+                            <AvatarImage
+                                src={auth.user.avatar}
+                                alt={auth.user.name}
+                                className="object-cover"
+                            />
+                            <AvatarFallback className="bg-[#ed4328] text-white">
+                                <UserCircle className="size-5" />
+                            </AvatarFallback>
+                        </Avatar>
+                    </Link>
+                    <div className="min-w-0 group-data-[collapsible=icon]:hidden">
                         <p className="truncate text-sm font-semibold">
                             {auth.user.name}
                         </p>
                         <p className="text-xs text-white/65 capitalize">
-                            {auth.user.role}
+                            {auth.user.role.replaceAll('_', ' ')}
                         </p>
                     </div>
                 </div>
                 <Form {...logout.form()}>
                     <button
                         type="submit"
+                        aria-label="Logout"
+                        title="Logout"
                         className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-white/10 text-sm font-semibold transition hover:bg-white/15"
                     >
                         <LogOut className="size-4" />
-                        Logout
+                        <span className="group-data-[collapsible=icon]:hidden">
+                            Logout
+                        </span>
                     </button>
                 </Form>
             </SidebarFooter>

@@ -21,6 +21,7 @@ import {
 } from '@/components/campaign-scope-field';
 import type { CampaignOption } from '@/components/campaign-scope-field';
 import { DateTimeField } from '@/components/date-time-field';
+import { useConfirmation } from '@/hooks/use-confirmation';
 
 type Category = { id: number; name: string };
 type Assessment = {
@@ -84,6 +85,7 @@ function AssessmentActions({
     item: Assessment;
     onEdit: (item: Assessment) => void;
 }) {
+    const confirmAction = useConfirmation();
     const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
     const close = () => setAnchorEl(null);
     const builderUrl = `/management/assessments/${item.id}/${item.simple_builder_enabled ? 'simple-builder' : 'builder'}`;
@@ -91,8 +93,8 @@ function AssessmentActions({
         { label: 'Open', run: () => router.visit(builderUrl) },
         {
             label: 'Clone',
-            run: () => {
-                if (window.confirm(`Clone ${item.title} as a new draft?`)) {
+            run: async () => {
+                if ((await confirmAction(`Clone ${item.title} as a new draft?`))) {
                     router.post(`/management/assessments/${item.id}/clone`);
                 }
             },
@@ -117,8 +119,8 @@ function AssessmentActions({
             ? [
                   {
                       label: 'Publish',
-                      run: () => {
-                          if (window.confirm('Publish this assessment?')) {
+                      run: async () => {
+                          if ((await confirmAction('Publish this assessment?'))) {
                               router.patch(
                                   `/management/assessments/${item.id}/publish`,
                               );
@@ -131,8 +133,8 @@ function AssessmentActions({
             ? [
                   {
                       label: 'Archive',
-                      run: () => {
-                          if (window.confirm('Archive this assessment?')) {
+                      run: async () => {
+                          if ((await confirmAction('Archive this assessment?'))) {
                               router.patch(
                                   `/management/assessments/${item.id}/archive`,
                               );

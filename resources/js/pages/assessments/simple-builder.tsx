@@ -9,6 +9,7 @@ import {
   TextField,
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
+import { useConfirmation } from '@/hooks/use-confirmation';
 
 type Option = { id?: number; option_text: string; is_correct: boolean };
 type Question = {
@@ -485,6 +486,8 @@ function Review({
   training: string[];
   total: number;
 }) {
+    const confirmAction = useConfirmation();
+
   return (
     <main className="min-h-full bg-[#f7f7fa] p-4 lg:p-6">
       <Head title={`Review ${assessment.title}`} />
@@ -581,8 +584,8 @@ function Review({
           <Button
             variant="contained"
             disabled={readinessErrors.length > 0}
-            onClick={() =>
-              window.confirm("Publish this assessment now?") &&
+            onClick={async () =>
+              (await confirmAction("Publish this assessment now?")) &&
               router.patch(`/management/assessments/${assessment.id}/publish`)
             }
           >

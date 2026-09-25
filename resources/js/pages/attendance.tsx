@@ -22,7 +22,7 @@ import {
     RefreshCw,
     Search,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { DateTimeField } from '@/components/date-time-field';
 
 type AttendanceEmployee = {
@@ -36,20 +36,44 @@ type AttendanceEmployee = {
     lunchOut: string | null;
     lunchIn: string | null;
     timeOut: string | null;
+    schedule: {
+        name: string | null;
+        timezone: string;
+        rest_day: boolean;
+        times: Partial<Record<TimeField, string>>;
+    };
+    actualTimes: Partial<Record<TimeField, string | null>>;
+    totalMinutes: number | null;
+    workedMinutes: number | null;
+    leaveMinutes: number;
+    approvals: {
+        leave: { id: number; type: string; paid: boolean } | null;
+        overtime: { id: number; time: string } | null;
+        undertime: { id: number; time: string } | null;
+        time_out: string | null;
+    };
 };
 
 type AttendanceProps = {
+    canOverride: boolean;
+    isTeamLeader: boolean;
     attendanceDate: string;
     employees: AttendanceEmployee[];
 };
 
 type TimeField = 'time_in' | 'lunch_out' | 'lunch_in' | 'time_out';
 
+const scheduledTime = (employee: AttendanceEmployee, field: TimeField) =>
+    (field === 'time_out' ? employee.approvals.time_out : null) ??
+    employee.schedule.times[field] ??
+    null;
+
 type TimeOverride = {
     employee: AttendanceEmployee;
     field: TimeField;
     label: string;
     value: string;
+    date: string;
 };
 
 const roles = [
@@ -84,29 +108,38 @@ const formatTime = (value: string | null) =>
         ? new Intl.DateTimeFormat('en-US', {
               hour: '2-digit',
               minute: '2-digit',
+              timeZone: 'Asia/Manila',
           }).format(new Date(value))
         : 'Not yet';
 
 const timeInputValue = (value: string | null) => {
-    if (!value) return '';
-    const date = new Date(value);
-    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-};
-
-const totalHours = (employee: AttendanceEmployee) => {
-    if (!employee.timeIn || !employee.timeOut) return '—';
-
-    let milliseconds =
-        new Date(employee.timeOut).getTime() -
-        new Date(employee.timeIn).getTime();
-
-    if (employee.lunchOut && employee.lunchIn) {
-        milliseconds -=
-            new Date(employee.lunchIn).getTime() -
-            new Date(employee.lunchOut).getTime();
+    if (!value) {
+        return '';
     }
 
-    const minutes = Math.max(0, Math.floor(milliseconds / 60000));
+    return new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Manila',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+    }).format(new Date(value));
+};
+
+const dateInputValue = (value: string) =>
+    new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(new Date(value));
+
+const totalHours = (employee: AttendanceEmployee) => {
+    if (employee.totalMinutes === null) {
+        return '—';
+    }
+
+    const minutes = employee.totalMinutes;
+
     return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 };
 
@@ -123,19 +156,23 @@ const statusPresentation: Record<string, { label: string; classes: string }> = {
 };
 
 export default function Attendance({
+    canOverride,
+    isTeamLeader,
     attendanceDate,
     employees,
 }: AttendanceProps) {
     const [search, setSearch] = useState('');
     const [role, setRole] = useState('all');
     const [status, setStatus] = useState('all');
-    const [page, setPage] = useState(1);
+    const [requestedPage, setPage] = useState(1);
     const [timeOverride, setTimeOverride] = useState<TimeOverride | null>(null);
     const [overrideProcessing, setOverrideProcessing] = useState(false);
+    const [overrideError, setOverrideError] = useState('');
     const perPage = 20;
 
     const filtered = useMemo(() => {
         const query = search.trim().toLowerCase();
+
         return employees.filter(
             (employee) =>
                 (!query ||
@@ -147,33 +184,37 @@ export default function Attendance({
     }, [employees, role, search, status]);
 
     const pages = Math.ceil(filtered.length / perPage);
+    const page = Math.max(1, Math.min(requestedPage, pages));
     const visible = filtered.slice((page - 1) * perPage, page * perPage);
     const first = filtered.length ? (page - 1) * perPage + 1 : 0;
     const last = Math.min(page * perPage, filtered.length);
-
-    useEffect(() => setPage(1), [role, search, status]);
-    useEffect(() => {
-        if (pages > 0 && page > pages) setPage(pages);
-    }, [page, pages]);
 
     const changeDate = (date: string) => {
         router.get('/attendance', { date }, { preserveState: true });
     };
 
     const saveTimeOverride = () => {
-        if (!timeOverride) return;
+        if (!timeOverride) {
+            return;
+        }
 
         setOverrideProcessing(true);
+        setOverrideError('');
         router.put(
             `/attendance/${timeOverride.employee.id}/time`,
             {
                 attendance_date: attendanceDate,
                 field: timeOverride.field,
                 time: timeOverride.value || null,
+                time_date: timeOverride.date,
             },
             {
                 preserveScroll: true,
                 onSuccess: () => setTimeOverride(null),
+                onError: (errors) =>
+                    setOverrideError(
+                        Object.values(errors)[0] ?? 'Unable to save the time.',
+                    ),
                 onFinish: () => setOverrideProcessing(false),
             },
         );
@@ -190,11 +231,14 @@ export default function Attendance({
                                 Workforce Management
                             </p>
                             <h1 className="text-3xl font-bold tracking-[-0.03em] text-[#1b1d2a] sm:text-4xl">
-                                Daily Attendance
+                                {isTeamLeader
+                                    ? 'Team Attendance'
+                                    : 'Daily Attendance'}
                             </h1>
                             <p className="mt-2 text-sm text-[#777b8e] sm:text-base">
-                                Review employee attendance and regular working
-                                hours.
+                                Review attendance and approved requests. Total
+                                hours exclude breaks and include paid leave
+                                credits.
                             </p>
                         </div>
                         <DateTimeField
@@ -204,7 +248,22 @@ export default function Attendance({
                             value={attendanceDate}
                             onChange={(event) => changeDate(event.target.value)}
                             slotProps={{ inputLabel: { shrink: true } }}
-                            sx={{ minWidth: 190, bgcolor: 'white' }}
+                            sx={{
+                                minWidth: 190,
+                                '& .MuiInputLabel-root': {
+                                    position: 'static',
+                                    transform: 'none',
+                                    marginBottom: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                },
+                                '& .MuiOutlinedInput-notchedOutline': {
+                                    top: 0,
+                                },
+                                '& .MuiOutlinedInput-notchedOutline legend': {
+                                    display: 'none',
+                                },
+                            }}
                         />
                     </header>
 
@@ -232,9 +291,10 @@ export default function Attendance({
                                         <input
                                             type="search"
                                             value={search}
-                                            onChange={(event) =>
-                                                setSearch(event.target.value)
-                                            }
+                                            onChange={(event) => {
+                                                setSearch(event.target.value);
+                                                setPage(1);
+                                            }}
                                             placeholder="Search name or ID"
                                             className="h-11 w-full rounded-xl border border-[#e1e2e8] bg-[#fafafd] pr-4 pl-11 text-sm outline-none focus:border-[#bd352a] focus:ring-3 focus:ring-[#bd352a]/10"
                                         />
@@ -243,9 +303,10 @@ export default function Attendance({
                                         select
                                         size="small"
                                         value={role}
-                                        onChange={(event) =>
-                                            setRole(event.target.value)
-                                        }
+                                        onChange={(event) => {
+                                            setRole(event.target.value);
+                                            setPage(1);
+                                        }}
                                         sx={{
                                             minWidth: 145,
                                             '& .MuiOutlinedInput-root': {
@@ -270,9 +331,10 @@ export default function Attendance({
                                         select
                                         size="small"
                                         value={status}
-                                        onChange={(event) =>
-                                            setStatus(event.target.value)
-                                        }
+                                        onChange={(event) => {
+                                            setStatus(event.target.value);
+                                            setPage(1);
+                                        }}
                                         sx={{
                                             minWidth: 155,
                                             '& .MuiOutlinedInput-root': {
@@ -330,6 +392,7 @@ export default function Attendance({
                                                 employee.status
                                             ] ??
                                             statusPresentation.not_recorded;
+
                                         return (
                                             <tr
                                                 key={employee.id}
@@ -358,6 +421,15 @@ export default function Attendance({
                                                 <td className="px-4 py-4 text-sm text-[#626576]">
                                                     {employee.team ??
                                                         'Not assigned'}
+                                                    <div className="mt-1 text-xs text-red-800">
+                                                        {employee.schedule
+                                                            .name ??
+                                                            'No schedule assigned'}
+                                                        {employee.schedule
+                                                            .rest_day
+                                                            ? ' · Rest day'
+                                                            : ''}
+                                                    </div>
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     <span
@@ -365,6 +437,41 @@ export default function Attendance({
                                                     >
                                                         {presentation.label}
                                                     </span>
+                                                    {employee.approvals
+                                                        .leave && (
+                                                        <div className="mt-2 text-xs text-sky-800">
+                                                            {employee.approvals
+                                                                .leave.paid
+                                                                ? 'Paid leave · scheduled hours credited'
+                                                                : 'Unpaid leave · no hours credited'}
+                                                        </div>
+                                                    )}
+                                                    {employee.approvals
+                                                        .overtime && (
+                                                        <div className="mt-2 text-xs text-emerald-700">
+                                                            Approved overtime
+                                                            until{' '}
+                                                            {formatTime(
+                                                                employee
+                                                                    .approvals
+                                                                    .overtime
+                                                                    .time,
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {employee.approvals
+                                                        .undertime && (
+                                                        <div className="mt-2 text-xs text-amber-700">
+                                                            Approved undertime
+                                                            at{' '}
+                                                            {formatTime(
+                                                                employee
+                                                                    .approvals
+                                                                    .undertime
+                                                                    .time,
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 {[
                                                     {
@@ -393,61 +500,102 @@ export default function Attendance({
                                                     },
                                                 ].map((entry) => {
                                                     const TimeIcon = entry.icon;
+
                                                     return (
                                                         <td
                                                             key={entry.field}
                                                             className="px-4 py-4"
                                                         >
                                                             <div className="flex items-center gap-1.5">
-                                                                <span className="min-w-16 text-sm font-medium text-[#4f5262]">
+                                                                <span
+                                                                    className="min-w-16 text-sm font-medium text-[#4f5262]"
+                                                                    title={
+                                                                        employee
+                                                                            .actualTimes[
+                                                                            entry
+                                                                                .field
+                                                                        ]
+                                                                            ? `Actual entry: ${formatTime(employee.actualTimes[entry.field] ?? null)}`
+                                                                            : undefined
+                                                                    }
+                                                                >
                                                                     {formatTime(
                                                                         entry.time,
                                                                     )}
                                                                 </span>
-                                                                <Tooltip
-                                                                    title={`Override ${entry.label}`}
-                                                                >
-                                                                    <IconButton
-                                                                        size="small"
-                                                                        aria-label={`Override ${entry.label} for ${employee.name}`}
-                                                                        onClick={() =>
-                                                                            setTimeOverride(
-                                                                                {
-                                                                                    employee,
-                                                                                    field: entry.field,
-                                                                                    label: entry.label,
-                                                                                    value: timeInputValue(
-                                                                                        entry.time,
-                                                                                    ),
-                                                                                },
-                                                                            )
-                                                                        }
-                                                                        sx={{
-                                                                            width: 30,
-                                                                            height: 30,
-                                                                            color: '#ad2823',
-                                                                            bgcolor:
-                                                                                '#fff1ef',
-                                                                            '&:hover':
-                                                                                {
-                                                                                    bgcolor:
-                                                                                        '#ffe2df',
-                                                                                },
-                                                                        }}
+                                                                {canOverride && (
+                                                                    <Tooltip
+                                                                        title={`Override ${entry.label}`}
                                                                     >
-                                                                        <TimeIcon
-                                                                            size={
-                                                                                15
-                                                                            }
-                                                                        />
-                                                                    </IconButton>
-                                                                </Tooltip>
+                                                                        <IconButton
+                                                                            size="small"
+                                                                            aria-label={`Override ${entry.label} for ${employee.name}`}
+                                                                            onClick={() => {
+                                                                                setOverrideError(
+                                                                                    '',
+                                                                                );
+                                                                                setTimeOverride(
+                                                                                    {
+                                                                                        employee,
+                                                                                        field: entry.field,
+                                                                                        label: entry.label,
+                                                                                        value: timeInputValue(
+                                                                                            employee
+                                                                                                .actualTimes[
+                                                                                                entry
+                                                                                                    .field
+                                                                                            ] ??
+                                                                                                entry.time,
+                                                                                        ),
+                                                                                        date: dateInputValue(
+                                                                                            employee
+                                                                                                .actualTimes[
+                                                                                                entry
+                                                                                                    .field
+                                                                                            ] ??
+                                                                                                entry.time ??
+                                                                                                scheduledTime(
+                                                                                                    employee,
+                                                                                                    entry.field,
+                                                                                                ) ??
+                                                                                                `${attendanceDate}T00:00:00+08:00`,
+                                                                                        ),
+                                                                                    },
+                                                                                );
+                                                                            }}
+                                                                            sx={{
+                                                                                width: 30,
+                                                                                height: 30,
+                                                                                color: '#ad2823',
+                                                                                bgcolor:
+                                                                                    '#fff1ef',
+                                                                                '&:hover':
+                                                                                    {
+                                                                                        bgcolor:
+                                                                                            '#ffe2df',
+                                                                                    },
+                                                                            }}
+                                                                        >
+                                                                            <TimeIcon
+                                                                                size={
+                                                                                    15
+                                                                                }
+                                                                            />
+                                                                        </IconButton>
+                                                                    </Tooltip>
+                                                                )}
                                                             </div>
                                                         </td>
                                                     );
                                                 })}
                                                 <td className="px-4 py-4 text-sm font-bold text-[#252735]">
                                                     {totalHours(employee)}
+                                                    {employee.approvals.leave
+                                                        ?.paid && (
+                                                        <div className="mt-1 text-xs font-normal text-sky-700">
+                                                            Paid leave credit
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="px-5 py-4 text-center">
                                                     <button
@@ -548,6 +696,55 @@ export default function Attendance({
                     <p className="mb-5 text-sm text-[#777b8e]">
                         {timeOverride?.employee.name} · {attendanceDate}
                     </p>
+                    <div className="mb-5 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-900">
+                        <strong>
+                            {timeOverride?.employee.schedule.name ??
+                                'No schedule assigned'}
+                        </strong>
+                        <p className="mt-1">
+                            {timeOverride &&
+                            scheduledTime(
+                                timeOverride.employee,
+                                timeOverride.field,
+                            )
+                                ? `Scheduled / approved ${timeOverride.label}: ${formatTime(scheduledTime(timeOverride.employee, timeOverride.field))}. Early starts and late finishes use scheduled times; late starts and early finishes keep the actual time.`
+                                : 'No scheduled time for this event. The actual entered time will be recorded.'}
+                        </p>
+                        <p className="mt-1 text-xs">
+                            {timeOverride?.employee.approvals.time_out && (
+                                <>
+                                    Approved clock-out:{' '}
+                                    {formatTime(
+                                        timeOverride.employee.approvals
+                                            .time_out,
+                                    )}
+                                    .{' '}
+                                </>
+                            )}
+                            {timeOverride?.employee.approvals.leave && (
+                                <>
+                                    This day is on leave; totals use the leave
+                                    approval.{' '}
+                                </>
+                            )}
+                            All times use Philippine time. Attendance date is
+                            the day the shift starts.
+                        </p>
+                    </div>
+                    <DateTimeField
+                        label="Actual entry date"
+                        type="date"
+                        fullWidth
+                        value={timeOverride?.date ?? ''}
+                        onChange={(event) =>
+                            setTimeOverride((current) =>
+                                current
+                                    ? { ...current, date: event.target.value }
+                                    : current,
+                            )
+                        }
+                        sx={{ mb: 2 }}
+                    />
                     <DateTimeField
                         label={timeOverride?.label}
                         type="time"
@@ -563,6 +760,11 @@ export default function Attendance({
                         slotProps={{ inputLabel: { shrink: true } }}
                         helperText="Clear the field and save to remove this recorded time."
                     />
+                    {overrideError && (
+                        <p role="alert" className="mt-3 text-sm text-red-700">
+                            {overrideError}
+                        </p>
+                    )}
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2.5 }}>
                     <Button

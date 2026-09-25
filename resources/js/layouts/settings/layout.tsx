@@ -1,8 +1,8 @@
-import { Link } from '@inertiajs/react';
+import { usePage } from '@inertiajs/react';
 import type { PropsWithChildren } from 'react';
 import Heading from '@/components/heading';
+import Link from '@/components/page-link';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { cn, toUrl } from '@/lib/utils';
 import { edit as editAppearance } from '@/routes/appearance';
@@ -17,7 +17,7 @@ const sidebarNavItems: NavItem[] = [
         icon: null,
     },
     {
-        title: 'Security',
+        title: 'Password & security',
         href: editSecurity(),
         icon: null,
     },
@@ -30,18 +30,21 @@ const sidebarNavItems: NavItem[] = [
 
 export default function SettingsLayout({ children }: PropsWithChildren) {
     const { isCurrentOrParentUrl } = useCurrentUrl();
+    const { url } = usePage();
 
     return (
-        <div className="px-4 py-6">
-            <Heading
-                title="Settings"
-                description="Manage your profile and account settings"
-            />
+        <div className="settings-layout mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col overflow-hidden px-4 py-4 text-[#17202d] [--background:white] [--foreground:#17202d] [--input:#e3dadd] [--muted-foreground:#64748b] [--primary-foreground:white] [--primary:#ae1b20] lg:px-8 lg:py-6">
+            <div className="shrink-0 [&>header]:mb-4 lg:[&>header]:mb-8">
+                <Heading
+                    title="Settings"
+                    description="Update your profile picture, personal details, and password"
+                />
+            </div>
 
-            <div className="flex flex-col lg:flex-row lg:space-x-12">
-                <aside className="w-full max-w-xl lg:w-48">
+            <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-12">
+                <aside className="w-full shrink-0 lg:w-48">
                     <nav
-                        className="flex flex-col space-y-1 space-x-0"
+                        className="flex flex-wrap gap-1 lg:flex-col"
                         aria-label="Settings"
                     >
                         {sidebarNavItems.map((item, index) => (
@@ -50,8 +53,9 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
                                 size="sm"
                                 variant="ghost"
                                 asChild
-                                className={cn('w-full justify-start', {
-                                    'bg-muted': isCurrentOrParentUrl(item.href),
+                                className={cn('justify-start lg:w-full', {
+                                    'bg-red-50 text-red-800':
+                                        isCurrentOrParentUrl(item.href),
                                 })}
                             >
                                 <Link href={item.href}>
@@ -65,11 +69,14 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
                     </nav>
                 </aside>
 
-                <Separator className="my-6 lg:hidden" />
-
-                <div className="flex-1 md:max-w-2xl">
-                    <section className="max-w-xl space-y-12">
-                        {children}
+                <div className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm md:max-w-2xl">
+                    <section
+                        key={url.split('?')[0]}
+                        aria-label="Settings content"
+                        tabIndex={0}
+                        className="h-full [scrollbar-gutter:stable] overflow-y-auto overscroll-contain p-5 sm:p-7"
+                    >
+                        <div className="max-w-xl space-y-8">{children}</div>
                     </section>
                 </div>
             </div>

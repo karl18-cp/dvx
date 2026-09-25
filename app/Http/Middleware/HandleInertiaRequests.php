@@ -8,6 +8,28 @@ use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
 {
+    public function urlResolver()
+    {
+        return fn (Request $request) => app(\App\Services\OpaquePageUrls::class)->encode($request->getRequestUri());
+    }
+
+    public function handle(Request $request, \Closure $next)
+    {
+        $response = parent::handle($request, $next);
+        $urls = app(\App\Services\OpaquePageUrls::class);
+        if ($response->isRedirect() && $location = $response->headers->get('Location')) {
+            $response->headers->set('Location', $urls->encode($location));
+        }
+        // Legacy bookmarks resolve to the same page, then adopt its opaque URL.
+        if (! $request->header('X-Inertia') && ! $request->attributes->has('opaque_page_url') && $request->isMethod('GET') && $response->isOk()
+            && $response instanceof \Illuminate\Http\Response && $response->original instanceof \Illuminate\Contracts\View\View && isset($response->original->getData()['page'])) {
+            $encoded = $urls->encode($request->getRequestUri());
+            if ($encoded !== $request->getRequestUri()) {
+                return redirect($encoded);
+            }
+        }
+        return $response;
+    }
     /**
      * The root template that's loaded on the first page visit.
      *
@@ -38,6 +60,7 @@ class HandleInertiaRequests extends Middleware
     {
         return [
             ...parent::share($request),
+            'navigation' => ['currentPath' => $request->getRequestUri(), 'links' => $request->user() ? app(\App\Services\OpaquePageUrls::class)->links() : []],
             'name' => config('app.name'),
             'auth' => [
                 'user' => $request->user(),

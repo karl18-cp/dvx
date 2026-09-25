@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import { Edit3, Plus, Trash2, UsersRound, X } from 'lucide-react';
 import { useState } from 'react';
+import { useConfirmation } from '@/hooks/use-confirmation';
 
 type Campaign = { id: number; name: string; abbreviation: string };
 type Team = {
@@ -33,6 +34,7 @@ type TeamsProps = {
 };
 
 export default function Teams({ teams, campaigns, filters }: TeamsProps) {
+    const confirmAction = useConfirmation();
     const [editing, setEditing] = useState<Team | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
     const [name, setName] = useState('');
@@ -75,8 +77,8 @@ export default function Teams({ teams, campaigns, filters }: TeamsProps) {
         }
     };
 
-    const remove = (team: Team) => {
-        if (!window.confirm(`Delete the ${team.name} team?`)) {
+    const remove = async (team: Team) => {
+        if (!(await confirmAction(`Delete the ${team.name} team?`))) {
             return;
         }
 

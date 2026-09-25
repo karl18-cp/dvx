@@ -1,5 +1,6 @@
 import type { InertiaLinkProps } from '@inertiajs/react';
 import { usePage } from '@inertiajs/react';
+import type { Navigation } from '@/components/page-link';
 import { toUrl } from '@/lib/utils';
 
 export type IsCurrentUrlFn = (
@@ -29,7 +30,8 @@ export type UseCurrentUrlReturn = {
 export function useCurrentUrl(): UseCurrentUrlReturn {
     const page = usePage();
     const currentUrlPath = new URL(
-        page.url,
+        (page.props.navigation as Navigation | undefined)?.currentPath ??
+            page.url,
         typeof window !== 'undefined'
             ? window.location.origin
             : 'http://localhost',

@@ -1,6 +1,7 @@
 import { createInertiaApp } from '@inertiajs/react';
 import { CssBaseline, ThemeProvider } from '@mui/material';
 import '@fontsource-variable/manrope';
+import { ConfirmationProvider } from '@/components/confirmation-provider';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
@@ -9,10 +10,8 @@ import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { dvxTheme } from '@/theme';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
-
 createInertiaApp({
-    title: (title) => (title ? `${title} - ${appName}` : appName),
+    title: () => 'Divertex',
     layout: (name) => {
         switch (true) {
             case name === 'welcome':
@@ -31,7 +30,7 @@ createInertiaApp({
             <ThemeProvider theme={dvxTheme}>
                 <CssBaseline />
                 <TooltipProvider delayDuration={0}>
-                    {app}
+                    <ConfirmationProvider>{app}</ConfirmationProvider>
                     <Toaster />
                 </TooltipProvider>
             </ThemeProvider>

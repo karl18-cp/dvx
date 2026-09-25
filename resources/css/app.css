@@ -7,6 +7,24 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* A subtle shared canvas for signed-in pages; cards retain their own surfaces. */
+.app-workspace {
+    background-color: #fff4f4;
+    background-image:
+        radial-gradient(ellipse at 0% 0%, rgb(174 27 32 / 9%), transparent 60%),
+        linear-gradient(135deg, #fff0f0 0%, #faf7fc 48%, #f9dedd 100%);
+}
+
+.app-workspace > main {
+    background-color: transparent;
+}
+
+.app-workspace:has(> .settings-layout) {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+}
+
 @theme {
     --font-sans:
         'Manrope Variable', 'Manrope', ui-sans-serif, system-ui, sans-serif,

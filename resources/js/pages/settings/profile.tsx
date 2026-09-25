@@ -6,13 +6,14 @@ import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileCo
 import DeleteUser from '@/components/delete-user';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
+import ProfilePhoto from '@/components/profile-photo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { edit } from '@/routes/profile';
+import { send } from '@/routes/verification';
 import type { Auth } from '@/types';
 /* @chisel-email-verification */
-import { send } from '@/routes/verification';
 /* @end-chisel-email-verification */
 
 type PageProps = {
@@ -37,6 +38,15 @@ export default function Profile(
             <Head title="Profile settings" />
 
             <h1 className="sr-only">Profile settings</h1>
+            {status && status !== 'verification-link-sent' && (
+                <p
+                    role="status"
+                    className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800"
+                >
+                    {status}
+                </p>
+            )}
+            <ProfilePhoto user={auth.user} />
 
             <div className="space-y-6">
                 <Heading
@@ -52,7 +62,7 @@ export default function Profile(
                     }}
                     className="space-y-6"
                 >
-                    {({ processing, errors }) => (
+                    {({ processing, errors, recentlySuccessful }) => (
                         <>
                             <div className="grid gap-2">
                                 <Label htmlFor="name">Name</Label>
@@ -125,8 +135,16 @@ export default function Profile(
                                     disabled={processing}
                                     data-test="update-profile-button"
                                 >
-                                    Save
+                                    Save profile
                                 </Button>
+                                {recentlySuccessful && (
+                                    <p
+                                        role="status"
+                                        className="text-sm text-green-700"
+                                    >
+                                        Profile saved.
+                                    </p>
+                                )}
                             </div>
                         </>
                     )}

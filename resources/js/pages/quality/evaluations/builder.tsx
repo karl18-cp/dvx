@@ -1,6 +1,7 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { DateTimeField } from '@/components/date-time-field';
 import DocxPreview from '@/components/docx-preview';
+import { useConfirmation } from '@/hooks/use-confirmation';
 type Criterion = {
     key: string;
     label: string;
@@ -55,6 +56,7 @@ export default function Builder({
     evaluation: Evaluation;
     review: Review;
 }) {
+    const confirmAction = useConfirmation();
     const existing = new Map(
         evaluation.criterion_results.map((r) => [r.criterion_snapshot_key, r]),
     );
@@ -381,11 +383,11 @@ export default function Builder({
                             </button>
                             <button
                                 disabled={review.missing.length > 0}
-                                onClick={() => {
+                                onClick={async () => {
                                     if (
-                                        confirm(
+                                        (await confirmAction(
                                             'Submit this Evaluation? Submitted evaluations cannot be edited.',
-                                        )
+                                        ))
                                     ) {
                                         router.post(
                                             `/management/call-evaluations/${evaluation.id}/submit`,

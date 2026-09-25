@@ -26,6 +26,7 @@ use Illuminate\Support\Carbon;
 ])]
 class FaceCredential extends Model
 {
+    protected $hidden = ['encrypted_descriptor'];
     /**
      * @return BelongsTo<User, $this>
      */

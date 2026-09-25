@@ -87,7 +87,7 @@ class AttendanceTest extends TestCase
             ->firstOrFail();
 
         $this->assertSame('present', $record->status);
-        $this->assertSame('08:15', $record->time_in->format('H:i'));
+        $this->assertSame('08:15', $record->time_in->setTimezone('Asia/Manila')->format('H:i'));
 
         $this->actingAs($admin)
             ->put(route('attendance.override-time', $employee), [

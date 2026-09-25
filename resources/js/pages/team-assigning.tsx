@@ -19,6 +19,7 @@ import {
     X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useConfirmation } from '@/hooks/use-confirmation';
 
 type Team = {
     id: number;
@@ -50,6 +51,7 @@ type Agent = {
 type Props = { teams: Team[]; teamLeaders: TeamLeader[]; agents: Agent[] };
 
 export default function TeamAssigning({ teams, teamLeaders, agents }: Props) {
+    const confirmAction = useConfirmation();
     const [teamId, setTeamId] = useState('');
     const [leaderId, setLeaderId] = useState('');
     const [selectedAgentIds, setSelectedAgentIds] = useState<number[]>([]);
@@ -107,7 +109,7 @@ export default function TeamAssigning({ teams, teamLeaders, agents }: Props) {
         ]);
     };
 
-    const save = () => {
+    const save = async () => {
         if (!teamId || !leaderId) {
             return;
         }
@@ -121,9 +123,9 @@ export default function TeamAssigning({ teams, teamLeaders, agents }: Props) {
 
         if (
             transfers.length > 0 &&
-            !window.confirm(
+            !(await confirmAction(
                 `Transfer ${transfers.length} selected agent(s) to ${selectedTeam?.name}? Their current team membership will be replaced. Historical assessment and coaching records will not be changed.`,
-            )
+            ))
         ) {
             return;
         }

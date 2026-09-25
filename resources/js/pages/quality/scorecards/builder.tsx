@@ -14,6 +14,7 @@ import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { CampaignScopeField } from '@/components/campaign-scope-field';
 import type { CampaignOption } from '@/components/campaign-scope-field';
+import { useConfirmation } from '@/hooks/use-confirmation';
 
 type Skill = { id: number; name: string };
 type Criterion = {
@@ -57,6 +58,7 @@ export default function ScorecardBuilder({
     skills: Skill[];
     total_points: number;
 }) {
+    const confirmAction = useConfirmation();
     const readOnly = scorecard.status === 'archived';
     const page = usePage<{ errors: Record<string, string | string[]> }>();
     const settings = useForm({
@@ -445,10 +447,10 @@ export default function ScorecardBuilder({
                                                         <button
                                                             aria-label="Delete category"
                                                             className="text-red-700"
-                                                            onClick={() =>
-                                                                window.confirm(
+                                                            onClick={async () =>
+                                                                (await confirmAction(
                                                                     `Delete ${category.name} and its ${category.criteria.length} Criteria? Historical Evaluation snapshots will not be affected.`,
-                                                                ) &&
+                                                                )) &&
                                                                 router.delete(
                                                                     `/management/qa-scorecards/${scorecard.id}/categories/${category.id}`,
                                                                     {
@@ -581,10 +583,10 @@ export default function ScorecardBuilder({
                                                                     <button
                                                                         aria-label="Delete criterion"
                                                                         className="text-red-700"
-                                                                        onClick={() =>
-                                                                            window.confirm(
+                                                                        onClick={async () =>
+                                                                            (await confirmAction(
                                                                                 `Delete “${criterion.label}”?`,
-                                                                            ) &&
+                                                                            )) &&
                                                                             router.delete(
                                                                                 `/management/qa-scorecards/${scorecard.id}/categories/${category.id}/criteria/${criterion.id}`,
                                                                                 {
@@ -675,10 +677,10 @@ export default function ScorecardBuilder({
                                     fullWidth
                                     color="error"
                                     className="mt-2"
-                                    onClick={() =>
-                                        window.confirm(
+                                    onClick={async () =>
+                                        (await confirmAction(
                                             'Delete this unused Draft permanently?',
-                                        ) &&
+                                        )) &&
                                         router.delete(
                                             `/management/qa-scorecards/${scorecard.id}`,
                                         )

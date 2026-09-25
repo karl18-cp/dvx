@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreEmployeeRequest;
 use App\Http\Requests\UpdateEmployeeRequest;
 use App\Models\User;
+use App\Services\EmployeeRoleService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -15,8 +17,9 @@ class EmployeeController extends Controller
 {
     public function index(Request $request): Response
     {
+        abort_unless(in_array($request->user()?->role, ['admin', 'manager'], true), 403);
         $employees = User::query()
-            ->with('personalInformation')
+            ->with(['personalInformation', 'campaignSchedule:id,name'])
             ->whereNotNull('username')
             ->orderBy('username')
             ->get()
@@ -28,7 +31,7 @@ class EmployeeController extends Controller
                 'position' => $this->positionLabel($user->role),
                 'status' => $user->status,
                 'team' => $user->team,
-                'schedule' => $user->schedule,
+                'schedule' => $user->campaignSchedule?->name ?? $user->schedule,
                 'personalInformation' => $user->personalInformation ? [
                     'email' => $user->personalInformation->email,
                     'birthDate' => $user->personalInformation->birth_date->toDateString(),
@@ -47,6 +50,7 @@ class EmployeeController extends Controller
         return Inertia::render('employees', [
             'nextEmployeeId' => $this->nextEmployeeId(),
             'canManageEmployees' => $request->user()?->role === 'admin',
+            'statusMessage' => $request->session()->get('status'),
             'employees' => $employees,
             'stats' => [
                 'total' => $employees->count(),
@@ -66,14 +70,7 @@ class EmployeeController extends Controller
         DB::transaction(function () use ($data): void {
             $employeeId = $this->nextEmployeeId(lockForUpdate: true);
 
-            $role = match ($data['position']) {
-                'Admin' => 'admin',
-                'Team Leader' => 'team_leader',
-                'Agent' => 'agent',
-                'IT Admin' => 'it_admin',
-                'IT Support' => 'it_support',
-                'IT Developer' => 'it_developer',
-            };
+            $role = $this->roleValue($data['position']);
 
             $user = User::query()->create([
                 'username' => $employeeId,
@@ -111,15 +108,15 @@ class EmployeeController extends Controller
         return to_route('employees')->with('status', 'Employee account created successfully.');
     }
 
-    public function update(UpdateEmployeeRequest $request, User $employee): RedirectResponse
+    public function update(UpdateEmployeeRequest $request, User $employee, EmployeeRoleService $roles): RedirectResponse
     {
         $data = $request->validated();
 
-        DB::transaction(function () use ($data, $employee): void {
+        DB::transaction(function () use ($data, $employee, $request, $roles): void {
+            $roles->change($request->user(), $employee, $this->roleValue($data['position']));
             $employee->update([
                 'name' => $data['full_name'],
                 'email' => $data['email'],
-                'role' => $this->roleValue($data['position']),
                 'status' => $data['status'],
                 ...(! empty($data['new_password']) ? ['password' => $data['new_password']] : []),
             ]);
@@ -143,6 +140,15 @@ class EmployeeController extends Controller
         });
 
         return to_route('employees')->with('status', 'Employee information updated successfully.');
+    }
+
+    public function updateRole(Request $request, User $employee, EmployeeRoleService $roles): RedirectResponse
+    {
+        abort_unless($request->user()?->role === 'admin', 403);
+        $data = $request->validate(['position' => ['required', Rule::in(array_keys(EmployeeRoleService::ROLES))]]);
+        $roles->change($request->user(), $employee, $this->roleValue($data['position']));
+
+        return to_route('employees')->with('status', $employee->name.' is now '.$data['position'].'.');
     }
 
     private function nextEmployeeId(bool $lockForUpdate = false): string
@@ -180,13 +186,6 @@ class EmployeeController extends Controller
 
     private function roleValue(string $position): string
     {
-        return match ($position) {
-            'Admin' => 'admin',
-            'Team Leader' => 'team_leader',
-            'Agent' => 'agent',
-            'IT Admin' => 'it_admin',
-            'IT Support' => 'it_support',
-            'IT Developer' => 'it_developer',
-        };
+        return EmployeeRoleService::ROLES[$position];
     }
 }

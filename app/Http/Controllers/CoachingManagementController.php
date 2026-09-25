@@ -49,13 +49,13 @@ class CoachingManagementController extends Controller
             ],
             'filters' => $filters,
             'employees' => User::query()->whereIn('role', ['agent', 'team_leader'])->where('status', 'active')->when($request->user()->role === 'team_leader', fn ($q) => $q->whereHas('teamMembership', fn ($m) => $m->whereIn('team_id', $access->teamIds($request->user()))))->orderBy('name')->get(['id', 'name', 'username']),
-            'coaches' => User::query()->whereIn('role', ['admin', 'manager'])->orderBy('name')->get(['id', 'name']),
+            'coaches' => User::query()->whereIn('role', ['admin', 'manager'])->when($request->user()->role === 'team_leader', fn ($q) => $q->whereIn('id', (clone $base)->select('coach_id')))->orderBy('name')->get(['id', 'name']),
             'skills' => AssessmentSkill::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'assessments' => Assessment::query()->orderBy('title')->get(['id', 'title']),
-            'materials' => TrainingLibraryMaterial::query()->where('status', 'active')->orderBy('title')->get(['id', 'title', 'skill_id', 'type']),
+            'assessments' => Assessment::query()->when($request->user()->role === 'team_leader', fn ($q) => $q->whereIn('id', (clone $base)->select('assessment_id')))->orderBy('title')->get(['id', 'title']),
+            'materials' => $request->user()->role === 'team_leader' ? [] : TrainingLibraryMaterial::query()->where('status', 'active')->orderBy('title')->get(['id', 'title', 'skill_id', 'type']),
             'types' => CoachingOptions::TYPES,
             'statuses' => CoachingOptions::STATUSES,
-            'campaigns' => Campaign::query()->orderByDesc('is_active')->orderBy('name')->get(['id', 'name', 'abbreviation', 'is_active']),
+            'campaigns' => Campaign::query()->when($request->user()->role === 'team_leader', fn ($q) => $q->whereHas('teams', fn ($q) => $q->whereIn('teams.id', $access->teamIds($request->user()))))->orderByDesc('is_active')->orderBy('name')->get(['id', 'name', 'abbreviation', 'is_active']),
             'teams' => Team::query()->when($request->user()->role === 'team_leader', fn ($q) => $q->whereIn('id', $access->teamIds($request->user())))->orderBy('name')->get(['id', 'name', 'campaign_id']),
             'prefill' => in_array($request->user()->role, ['admin', 'manager'], true) ? $this->coachingPrefill($request) : [],
             'can_manage' => in_array($request->user()->role, ['admin', 'manager'], true),
@@ -98,9 +98,9 @@ class CoachingManagementController extends Controller
 
     public function show(Request $request, CoachingRecord $coaching, QaAccessService $access): Response
     {
-        $access->authorizeTeam($request->user(), $coaching->team_id);
+        $access->authorizeTeam($request->user(), $coaching->team_id, $coaching->employee_id);
 
-        return Inertia::render('coaching/show', ['coaching' => $this->detail($coaching), 'materials' => TrainingLibraryMaterial::query()->where('status', 'active')->orderBy('title')->get(['id', 'title', 'type', 'skill_id']), 'can_manage' => in_array($request->user()->role, ['admin', 'manager'], true)]);
+        return Inertia::render('coaching/show', ['coaching' => $this->detail($coaching), 'materials' => $request->user()->role === 'team_leader' ? [] : TrainingLibraryMaterial::query()->where('status', 'active')->orderBy('title')->get(['id', 'title', 'type', 'skill_id']), 'can_manage' => in_array($request->user()->role, ['admin', 'manager'], true)]);
     }
 
     public function update(Request $request, CoachingRecord $coaching): RedirectResponse

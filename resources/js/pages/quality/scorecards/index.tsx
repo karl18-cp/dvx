@@ -14,6 +14,7 @@ import {
     CampaignScopeField,
 } from '@/components/campaign-scope-field';
 import type { CampaignOption } from '@/components/campaign-scope-field';
+import { useConfirmation } from '@/hooks/use-confirmation';
 
 type Scorecard = {
     id: number;
@@ -38,6 +39,7 @@ export default function ScorecardIndex({
     campaigns: CampaignOption[];
     filters: { search?: string; status?: string; campaign?: number };
 }) {
+    const confirmAction = useConfirmation();
     const [search, setSearch] = useState(filters.search || '');
     const [open, setOpen] = useState(false);
     const form = useForm({
@@ -245,10 +247,10 @@ export default function ScorecardIndex({
                                                     'archived' && (
                                                     <button
                                                         className="font-semibold text-slate-700"
-                                                        onClick={() =>
-                                                            window.confirm(
+                                                        onClick={async () =>
+                                                            (await confirmAction(
                                                                 'Archive this Scorecard?',
-                                                            ) &&
+                                                            )) &&
                                                             router.post(
                                                                 `/management/qa-scorecards/${scorecard.id}/archive`,
                                                             )

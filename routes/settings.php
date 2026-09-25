@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Settings\ProfileController;
+use App\Http\Controllers\Settings\ProfilePhotoController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
@@ -10,6 +11,9 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::post('settings/profile/photo', [ProfilePhotoController::class, 'store'])->middleware('throttle:10,1')->name('profile-photo.store');
+    Route::delete('settings/profile/photo', [ProfilePhotoController::class, 'destroy'])->name('profile-photo.destroy');
+    Route::get('users/{user}/photo', [ProfilePhotoController::class, 'show'])->name('profile-photo.show');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {

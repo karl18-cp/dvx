@@ -24,8 +24,12 @@ class EmployeeAssessmentController extends Controller
 {
     private const ASSIGNMENT_TIMEZONE = 'Asia/Manila';
 
-    public function index(Request $request): Response
+    public function index(Request $request, AdminLearningOverviewController $overview): Response
     {
+        if ($request->user()->role === 'admin') {
+            return $overview->assessments($request);
+        }
+
         $assignments = AssessmentAssignment::query()->where('employee_id', $request->user()->id)
             ->with(['assessment.category:id,name', 'assessment.trainingMaterials' => fn ($q) => $q->select(['id', 'assessment_id', 'is_required'])->where('is_active', true)->with(['trainingProgress' => fn ($p) => $p->select(['id', 'material_id', 'completed_at'])->where('employee_id', $request->user()->id)]), 'assessment.trainingAttachments' => fn ($q) => $q->with(['material.campaigns:id', 'progress' => fn ($p) => $p->where('employee_id', $request->user()->id)]), 'attempts' => fn ($q) => $q->select(['id', 'assignment_id', 'employee_id', 'attempt_number', 'question_snapshot', 'submitted_at', 'status'])->where('employee_id', $request->user()->id)->latest('attempt_number')])
             ->get()->map(function ($assignment): array {

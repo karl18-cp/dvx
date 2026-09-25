@@ -1,0 +1,63 @@
+/* Consistent, visible labels and controls within the task forms only. */
+.task-tracker-fields .MuiInputLabel-root {
+    position: static;
+    transform: none;
+    max-width: 100%;
+    margin-bottom: 8px;
+    color: #1e293b;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.task-tracker-fields .MuiInputLabel-asterisk {
+    color: #ae1b20;
+}
+
+.task-tracker-fields .MuiOutlinedInput-root {
+    border-radius: 12px;
+    background: #fff;
+    font-size: 14px;
+}
+
+.task-tracker-fields .MuiOutlinedInput-root:not(.MuiInputBase-multiline) {
+    height: 44px;
+}
+
+.task-tracker-fields .MuiOutlinedInput-root:not(.MuiInputBase-multiline) .MuiOutlinedInput-input {
+    box-sizing: border-box;
+    height: 44px;
+    padding: 10px 14px;
+    line-height: 24px;
+}
+
+.task-tracker-fields .MuiOutlinedInput-root:not(.MuiInputBase-multiline) .MuiSelect-select {
+    padding-right: 36px;
+}
+
+.task-tracker-fields .MuiOutlinedInput-notchedOutline {
+    border-color: #dce1e9;
+    top: 0;
+}
+
+.task-tracker-fields .MuiOutlinedInput-notchedOutline legend {
+    display: none;
+}
+
+.task-tracker-fields .MuiInputBase-multiline {
+    padding: 12px 14px;
+}
+
+.task-tracker-fields .MuiInputBase-inputMultiline {
+    line-height: 24px;
+}
+
+.task-tracker-fields .MuiFormHelperText-root {
+    margin-left: 0;
+}
+
+.task-tracker-fields .MuiButton-root {
+    min-height: 44px;
+    border-radius: 12px;
+    padding-inline: 20px;
+}

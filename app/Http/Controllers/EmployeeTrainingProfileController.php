@@ -19,7 +19,7 @@ class EmployeeTrainingProfileController extends Controller
     {
         abort_unless(in_array($employee->role, ['agent', 'team_leader'], true), 404);
         $teamId = $employee->teamMembership?->team_id;
-        $access->authorizeTeam($request->user(), $teamId);
+        $access->authorizeTeam($request->user(), $teamId, $employee->id);
 
         $bestAttempts = AssessmentAttempt::query()->where('employee_id', $employee->id)->whereIn('status', ['passed', 'failed'])->whereNotNull('percentage')
             ->whereRaw('assessment_attempts.id = (select a2.id from assessment_attempts a2 where a2.employee_id = assessment_attempts.employee_id and a2.assessment_id = assessment_attempts.assessment_id and a2.status in (?, ?) order by a2.percentage desc, a2.id desc limit 1)', ['passed', 'failed']);

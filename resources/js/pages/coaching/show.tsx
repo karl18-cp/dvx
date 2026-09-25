@@ -2,6 +2,7 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import { Button, MenuItem, TextField } from '@mui/material';
 import CoachingExportButton from '@/components/coaching-export-button';
 import { DateTimeField } from '@/components/date-time-field';
+import { useConfirmation } from '@/hooks/use-confirmation';
 import { coachingDateValue } from '@/lib/coaching-dates';
 
 type Ref = { id: number; name: string };
@@ -47,6 +48,7 @@ export default function CoachingShow({
     materials: { id: number; title: string; type: string }[];
     can_manage: boolean;
 }) {
+    const confirmAction = useConfirmation();
     const locked = coaching.status === 'completed' || !can_manage;
     const form = useForm({
         type: coaching.type,
@@ -337,11 +339,11 @@ export default function CoachingShow({
                         <Button
                             color="success"
                             variant="contained"
-                            onClick={() => {
+                            onClick={async () => {
                                 if (
-                                    window.confirm(
+                                    (await confirmAction(
                                         'Complete this coaching record? It will become read-only.',
-                                    )
+                                    ))
                                 ) {
                                     completion.post(
                                         `/management/coaching/${coaching.id}/complete`,

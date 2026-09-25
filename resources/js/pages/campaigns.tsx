@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import { Edit3, Megaphone, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
+import { useConfirmation } from '@/hooks/use-confirmation';
 
 type Campaign = {
     id: number;
@@ -31,6 +32,7 @@ type CampaignsProps = {
 };
 
 export default function Campaigns({ campaigns }: CampaignsProps) {
+    const confirmAction = useConfirmation();
     const [editing, setEditing] = useState<Campaign | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
     const [name, setName] = useState('');
@@ -84,8 +86,8 @@ export default function Campaigns({ campaigns }: CampaignsProps) {
         }
     };
 
-    const remove = (campaign: Campaign) => {
-        if (!window.confirm(`Delete the ${campaign.name} campaign?`)) {
+    const remove = async (campaign: Campaign) => {
+        if (!(await confirmAction(`Delete the ${campaign.name} campaign?`))) {
             return;
         }
 

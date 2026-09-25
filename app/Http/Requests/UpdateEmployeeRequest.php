@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Services\EmployeeRoleService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -20,14 +21,7 @@ class UpdateEmployeeRequest extends FormRequest
     {
         return [
             'full_name' => ['required', 'string', 'max:100'],
-            'position' => ['required', Rule::in([
-                'Admin',
-                'Team Leader',
-                'Agent',
-                'IT Admin',
-                'IT Support',
-                'IT Developer',
-            ])],
+            'position' => ['required', Rule::in(array_keys(EmployeeRoleService::ROLES))],
             'email' => [
                 'required',
                 'email:rfc',

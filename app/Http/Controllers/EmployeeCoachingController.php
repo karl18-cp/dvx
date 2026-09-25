@@ -14,8 +14,12 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EmployeeCoachingController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, AdminLearningOverviewController $overview): Response
     {
+        if ($request->user()->role === 'admin') {
+            return $overview->coaching($request);
+        }
+
         $records = CoachingRecord::query()->where('employee_id', $request->user()->id)->with(['coach:id,name', 'skill:id,name', 'assessment:id,title'])->withCount('trainingAssignments')->latest('coaching_date')->paginate(12);
 
         return Inertia::render('coaching/my-coaching', ['records' => $records]);

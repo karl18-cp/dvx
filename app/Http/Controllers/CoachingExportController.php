@@ -12,11 +12,11 @@ class CoachingExportController extends Controller
 {
     public function __invoke(Request $request, CoachingRecord $coaching, QaAccessService $access): JsonResponse
     {
-        $access->authorizeTeam($request->user(), $coaching->team_id);
+        $access->authorizeTeam($request->user(), $coaching->team_id, $coaching->employee_id);
         $coaching->load(['employee', 'coach', 'skill', 'assessment', 'callEvaluation', 'trainingAssignments.material', 'trainingAssignments.progress']);
         $evaluation = $coaching->callEvaluation;
         if ($evaluation) {
-            $access->authorizeTeam($request->user(), $evaluation->team_id);
+            $access->authorizeTeam($request->user(), $evaluation->team_id, $evaluation->employee_id);
             abort_unless($evaluation->status === 'submitted' || in_array($request->user()->role, ['admin', 'manager'], true), 404);
         }
         $lines = [

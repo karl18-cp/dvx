@@ -25,6 +25,7 @@ import {
     Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useConfirmation } from '@/hooks/use-confirmation';
 
 type Option = { option_text: string; is_correct: boolean };
 type Item = {
@@ -83,6 +84,7 @@ export default function Builder({
     categories,
     totals,
 }: Props) {
+    const confirmAction = useConfirmation();
     const [tab, setTab] = useState(0),
         [materialOpen, setMaterialOpen] = useState(false),
         [questionOpen, setQuestionOpen] = useState(false),
@@ -174,7 +176,7 @@ export default function Builder({
         );
         setQuestionOpen(true);
     };
-    const changeQuestionType = (nextType: string) => {
+    const changeQuestionType = async (nextType: string) => {
         const currentType = question.data.question_type;
 
         if (nextType === 'true_false') {
@@ -185,9 +187,9 @@ export default function Builder({
             if (
                 currentType !== 'true_false' &&
                 hasMeaningfulChoices &&
-                !window.confirm(
+                !(await confirmAction(
                     'Switching to True/False will replace the current answer choices. Continue?',
-                )
+                ))
             ) {
                 return;
             }
@@ -391,10 +393,10 @@ export default function Builder({
                                                     </Button>
                                                     <Button
                                                         color="error"
-                                                        onClick={() =>
-                                                            confirm(
+                                                        onClick={async () =>
+                                                            (await confirmAction(
                                                                 'Remove material?',
-                                                            ) &&
+                                                            )) &&
                                                             router.delete(
                                                                 `/management/assessments/${assessment.id}/materials/${m.id}`,
                                                             )
@@ -420,8 +422,8 @@ export default function Builder({
                                                     </div>
                                                     <Button
                                                         color="error"
-                                                        onClick={() =>
-                                                            confirm('Detach this Training Library material?') &&
+                                                        onClick={async () =>
+                                                            (await confirmAction('Detach this Training Library material?')) &&
                                                             router.delete(`/management/assessments/${assessment.id}/training-library/${attachment.id}`)
                                                         }
                                                     >
@@ -512,10 +514,10 @@ export default function Builder({
                                                 </Button>
                                                 <Button
                                                     color="error"
-                                                    onClick={() =>
-                                                        confirm(
+                                                    onClick={async () =>
+                                                        (await confirmAction(
                                                             'Delete question?',
-                                                        ) &&
+                                                        )) &&
                                                         router.delete(
                                                             `/management/assessments/${assessment.id}/questions/${q.id}`,
                                                         )

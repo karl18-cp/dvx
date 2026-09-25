@@ -27,6 +27,15 @@ class AttendanceRecord extends Model
     protected function casts(): array
     {
         return [
+            'approval_snapshot' => 'array',
+            'worked_minutes' => 'integer',
+            'leave_minutes' => 'integer',
+            'total_minutes' => 'integer',
+            'schedule_snapshot' => 'array',
+            'actual_time_in' => 'datetime',
+            'actual_lunch_out' => 'datetime',
+            'actual_lunch_in' => 'datetime',
+            'actual_time_out' => 'datetime',
             'attendance_date' => 'date',
             'time_in' => 'datetime',
             'lunch_out' => 'datetime',

@@ -1,0 +1,10 @@
+.app-workspace:has(> .divertext-workspace) {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.divertext-message {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}

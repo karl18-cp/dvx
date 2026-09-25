@@ -9,6 +9,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -48,11 +49,14 @@ class ProfileController extends Controller
      */
     public function destroy(ProfileDeleteRequest $request): RedirectResponse
     {
-        $user = $request->user();
+        $user = $request->user()->fresh();
 
         Auth::logout();
 
         $user->delete();
+        if ($user->profile_photo_path) {
+            Storage::disk('local')->delete($user->profile_photo_path);
+        }
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
