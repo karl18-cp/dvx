@@ -343,6 +343,7 @@ export function AppSidebar() {
     const [trainingOpen, setTrainingOpen] = useState(true);
     const [qualityOpen, setQualityOpen] = useState(true);
     const isQaAdmin = auth.user.role === 'qa_admin';
+    const isAccounting = auth.user.role === 'accounting';
     const isManager =
         isQaAdmin || auth.user.role === 'admin' || auth.user.role === 'manager';
     const isQaViewer = isManager || auth.user.role === 'team_leader';
@@ -395,6 +396,21 @@ export function AppSidebar() {
 
             <SidebarContent className="bg-[linear-gradient(180deg,#191426_0%,#28131d_62%,#401414_100%)] px-3 py-4 group-data-[collapsible=icon]:px-1">
                 <nav className="space-y-1">
+                    {['admin', 'accounting'].includes(auth.user.role) && (
+                        <SidebarItem
+                            item={{
+                                label: 'Accounting',
+                                icon: ClipboardList,
+                                href: '/accounting',
+                            }}
+                            currentUrl={
+                                (
+                                    page.props.navigation?.currentPath ??
+                                    page.url
+                                ).split('?')[0]
+                            }
+                        />
+                    )}
                     {['admin', 'qa_admin', 'team_leader'].includes(
                         auth.user.role,
                     ) && (
@@ -442,7 +458,7 @@ export function AppSidebar() {
                             }
                         />
                     )}
-                    {(isQaAdmin
+                    {(isQaAdmin || isAccounting
                         ? []
                         : auth.user.role === 'trainee'
                           ? traineeItems
@@ -585,9 +601,13 @@ export function AppSidebar() {
                     )}
 
                     <div className="pt-2">
-                        {!['agent', 'trainee', 'qa_admin'].includes(
-                            auth.user.role,
-                        ) && (
+                        {![
+                            'admin',
+                            'agent',
+                            'trainee',
+                            'qa_admin',
+                            'accounting',
+                        ].includes(auth.user.role) && (
                             <SidebarItem
                                 item={{ label: 'Payroll', icon: ReceiptText }}
                                 currentUrl={

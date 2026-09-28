@@ -26,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->web(append: [
             \App\Http\Middleware\EnsureActiveAccount::class,
+            \App\Http\Middleware\RestrictAccountingAccess::class,
             HandleAppearance::class,
             \App\Http\Middleware\RestrictTraineeAccess::class,
             \App\Http\Middleware\RestrictQaAdminAccess::class,
@@ -34,6 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->dontFlash(['account_number', 'account_holder', 'notes']);
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );

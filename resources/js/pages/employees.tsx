@@ -114,6 +114,7 @@ const positions = [
     'Admin',
     'Manager',
     'QA Assessment Admin',
+    'Accounting',
     'Team Leader',
     'Agent',
     'Trainee',

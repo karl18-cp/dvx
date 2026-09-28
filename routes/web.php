@@ -64,6 +64,28 @@ Route::get('application-status/challenge', [ApplicantStatusController::class, 'c
 Route::post('application-status', [ApplicantStatusController::class, 'lookup'])->middleware('throttle:5,10')->name('application-status.lookup');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('accounting', [\App\Http\Controllers\AccountingController::class, 'index']);
+    Route::get('accounting/documents', [\App\Http\Controllers\AccountingDocumentController::class, 'index']);
+    Route::post('accounting/documents', [\App\Http\Controllers\AccountingDocumentController::class, 'store']);
+    Route::get('accounting/documents/{document}', [\App\Http\Controllers\AccountingDocumentController::class, 'show']);
+    Route::post('accounting/documents/{document}/payments', [\App\Http\Controllers\AccountingDocumentController::class, 'payment']);
+    Route::patch('accounting/documents/{document}/void', [\App\Http\Controllers\AccountingDocumentController::class, 'void']);
+    Route::get('accounting/documents/{document}/attachment', [\App\Http\Controllers\AccountingDocumentController::class, 'download']);
+    Route::get('accounting/bank-accounts', [\App\Http\Controllers\EmployeeBankAccountController::class, 'index']);
+    Route::post('accounting/bank-accounts', [\App\Http\Controllers\EmployeeBankAccountController::class, 'store']);
+    Route::get('accounting/bank-accounts/{bankAccount}', [\App\Http\Controllers\EmployeeBankAccountController::class, 'show']);
+    Route::patch('accounting/bank-accounts/{bankAccount}', [\App\Http\Controllers\EmployeeBankAccountController::class, 'update']);
+    Route::delete('accounting/bank-accounts/{bankAccount}', [\App\Http\Controllers\EmployeeBankAccountController::class, 'destroy']);
+    Route::get('accounting/expenses', [\App\Http\Controllers\AccountingExpenseController::class, 'index']);
+    Route::post('accounting/expenses', [\App\Http\Controllers\AccountingExpenseController::class, 'store']);
+    Route::patch('accounting/expenses/{expense}/void', [\App\Http\Controllers\AccountingExpenseController::class, 'void']);
+    Route::post('accounting/expense-categories', [\App\Http\Controllers\AccountingExpenseController::class, 'category']);
+    Route::patch('accounting/expense-categories/{category}', [\App\Http\Controllers\AccountingExpenseController::class, 'category'])->whereNumber('category');
+    Route::post('accounting/payroll', [\App\Http\Controllers\AccountingController::class, 'payroll']);
+    Route::get('accounting/allowances/{plan}/{trainee}', [\App\Http\Controllers\AccountingController::class, 'preview']);
+    Route::post('accounting/allowances/{plan}/{trainee}', [\App\Http\Controllers\AccountingController::class, 'allowance']);
+    Route::get('accounting/entries/{entry}', [\App\Http\Controllers\AccountingController::class, 'show']);
+    Route::patch('accounting/entries/{entry}', [\App\Http\Controllers\AccountingController::class, 'update']);
     Route::get('management/applicant-exams', [\App\Http\Controllers\ApplicantExamController::class, 'index']);
     Route::put('management/applicant-exams/settings', [\App\Http\Controllers\ApplicantExamController::class, 'settings']);
     Route::post('management/applicant-exams/questions', [\App\Http\Controllers\ApplicantExamController::class, 'question']);

@@ -16,7 +16,9 @@ export default function AppSidebarLayout({
 
     return (
         <DiverTextUnreadProvider
-            enabled={!['trainee', 'qa_admin'].includes(auth.user.role)}
+            enabled={
+                !['trainee', 'qa_admin', 'accounting'].includes(auth.user.role)
+            }
         >
             <AppShell variant="sidebar">
                 <AppSidebar />
@@ -27,9 +29,9 @@ export default function AppSidebarLayout({
                     <AppSidebarHeader breadcrumbs={breadcrumbs} />
                     {children}
                 </AppContent>
-                {!['trainee', 'qa_admin'].includes(auth.user.role) && (
-                    <MessageWidget />
-                )}
+                {!['trainee', 'qa_admin', 'accounting'].includes(
+                    auth.user.role,
+                ) && <MessageWidget />}
             </AppShell>
         </DiverTextUnreadProvider>
     );

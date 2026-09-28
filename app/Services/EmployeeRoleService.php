@@ -12,6 +12,7 @@ class EmployeeRoleService
         'Admin' => 'admin',
         'Manager' => 'manager',
         'QA Assessment Admin' => 'qa_admin',
+        'Accounting' => 'accounting',
         'Team Leader' => 'team_leader',
         'Agent' => 'agent',
         'Trainee' => 'trainee',
