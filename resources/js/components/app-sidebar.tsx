@@ -69,6 +69,11 @@ const primaryItems: MenuItem[] = [
 ];
 
 const traineeItems: MenuItem[] = [
+    {
+        label: 'Training Plan & Allowance',
+        icon: CalendarDays,
+        href: '/my-training-plan',
+    },
     { label: 'My Attendance', icon: CalendarDays, href: '/my-attendance' },
     {
         label: 'Training & Assessments',
@@ -79,6 +84,11 @@ const traineeItems: MenuItem[] = [
 ];
 
 const agentItems: MenuItem[] = [
+    {
+        label: 'Training Allowance',
+        icon: CalendarDays,
+        href: '/my-training-plan',
+    },
     { label: 'Dashboard', icon: LayoutDashboard, href: dashboard().url },
     { label: 'Ranking', icon: Trophy, href: '/ranking' },
     { label: 'My Attendance', icon: CalendarCheck, href: '/my-attendance' },
@@ -138,6 +148,16 @@ const coachingItem: MenuItem = {
 };
 
 const trainingItems: MenuItem[] = [
+    {
+        label: 'Applicant Logic Exam',
+        icon: BookOpenCheck,
+        href: '/management/applicant-exams',
+    },
+    {
+        label: 'Training Plans',
+        icon: CalendarDays,
+        href: '/management/training-plans',
+    },
     {
         label: 'Assessments',
         icon: BookOpenCheck,
@@ -375,6 +395,23 @@ export function AppSidebar() {
 
             <SidebarContent className="bg-[linear-gradient(180deg,#191426_0%,#28131d_62%,#401414_100%)] px-3 py-4 group-data-[collapsible=icon]:px-1">
                 <nav className="space-y-1">
+                    {['admin', 'qa_admin', 'team_leader'].includes(
+                        auth.user.role,
+                    ) && (
+                        <SidebarItem
+                            item={{
+                                label: 'Employee Status',
+                                icon: Users,
+                                href: '/account-statuses',
+                            }}
+                            currentUrl={
+                                (
+                                    page.props.navigation?.currentPath ??
+                                    page.url
+                                ).split('?')[0]
+                            }
+                        />
+                    )}
                     {auth.user.role === 'team_leader' && (
                         <SidebarItem
                             item={{
@@ -490,7 +527,16 @@ export function AppSidebar() {
                             <SidebarGroup
                                 label="Training & Development"
                                 icon={BookOpenCheck}
-                                items={trainingItems}
+                                items={trainingItems.filter(
+                                    (item) =>
+                                        ![
+                                            '/management/training-plans',
+                                            '/management/applicant-exams',
+                                        ].includes(item.href as string) ||
+                                        ['admin', 'qa_admin'].includes(
+                                            auth.user.role,
+                                        ),
+                                )}
                                 open={trainingOpen}
                                 onToggle={() =>
                                     setTrainingOpen((value) => !value)

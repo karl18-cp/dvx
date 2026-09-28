@@ -10,6 +10,8 @@ import {
 } from '@mui/material';
 import { CalendarDays, Users, X } from 'lucide-react';
 import { useState } from 'react';
+import TeamManagementControls from '@/components/team-management-controls';
+import type { TeamControlsProps } from '@/components/team-management-controls';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 type Member = {
@@ -33,14 +35,19 @@ type Member = {
         }[];
     } | null;
 };
-type Props = {
+type Props = Omit<TeamControlsProps, 'teams'> & {
     summary: {
         teams: number;
         members: number;
         pendingRequests: number;
         openTasks: number;
     };
-    teams: { id: number; name: string; campaign: string | null }[];
+    teams: {
+        id: number;
+        name: string;
+        campaign: string | null;
+        campaign_id: number;
+    }[];
     members: Member[];
 };
 const days = [
@@ -52,7 +59,13 @@ const days = [
     'Saturday',
     'Sunday',
 ];
-export default function MyTeam({ summary, teams, members }: Props) {
+export default function MyTeam({
+    summary,
+    teams,
+    members,
+    assignableAgents,
+    ownSchedule,
+}: Props) {
     const [search, setSearch] = useState('');
     const [team, setTeam] = useState('all');
     const [viewing, setViewing] = useState<Member | null>(null);
@@ -80,6 +93,11 @@ export default function MyTeam({ summary, teams, members }: Props) {
                         Your assigned teams, people, and working schedules.
                     </p>
                 </header>
+                <TeamManagementControls
+                    teams={teams}
+                    assignableAgents={assignableAgents}
+                    ownSchedule={ownSchedule}
+                />
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     {[
                         [summary.teams, 'Assigned teams', '/my-team'],

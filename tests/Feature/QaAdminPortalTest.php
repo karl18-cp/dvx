@@ -47,6 +47,7 @@ class QaAdminPortalTest extends TestCase
     public function test_inactive_qa_admin_is_blocked(): void
     {
         $this->actingAs(User::factory()->create(['role' => 'qa_admin', 'status' => 'terminated']));
-        $this->get('/management/qa-dashboard')->assertForbidden();
+        $this->get('/management/qa-dashboard')->assertRedirect('/login');
+        $this->assertGuest();
     }
 }

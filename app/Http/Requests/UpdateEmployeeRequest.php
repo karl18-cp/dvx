@@ -26,7 +26,7 @@ class UpdateEmployeeRequest extends FormRequest
                 'required',
                 'email:rfc',
                 'max:255',
-                Rule::unique('users', 'email')->ignore($this->route('employee')),
+                \App\Services\AccountIdentity::emailRule($this->route('employee')),
             ],
             'status' => ['required', Rule::in([
                 'active',

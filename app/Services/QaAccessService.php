@@ -19,7 +19,7 @@ class QaAccessService
     public function scope(Builder $query, User $user, string $column = 'team_id'): Builder
     {
         if ($user->role === 'team_leader') {
-            $query->whereIn($column, $this->teamIds($user));
+            $query->where(fn ($q) => $q->whereIn($column, $this->teamIds($user))->orWhere(fn ($unassigned) => $unassigned->whereNull($column)->whereIn($query->getModel()->qualifyColumn('employee_id'), app(TeamLeaderWorkspaceService::class)->members($user)->where('role', 'trainee')->select('users.id'))));
             $query->whereIn($query->getModel()->qualifyColumn('employee_id'), app(TeamLeaderWorkspaceService::class)->members($user)->select('users.id'));
         }
 
@@ -29,6 +29,9 @@ class QaAccessService
     public function authorizeTeam(User $user, ?int $teamId, ?int $employeeId = null): void
     {
         if ($user->role === 'team_leader') {
+            if ($teamId === null && $employeeId !== null && app(TeamLeaderWorkspaceService::class)->members($user)->where('role', 'trainee')->whereKey($employeeId)->exists()) {
+                return;
+            }
             abort_unless($teamId && in_array($teamId, $this->teamIds($user), true), 403);
             if ($employeeId !== null) {
                 abort_unless(app(TeamLeaderWorkspaceService::class)->members($user)->whereKey($employeeId)->exists(), 403);

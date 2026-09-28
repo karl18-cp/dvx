@@ -16,16 +16,16 @@ class TraineePortalTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_graduation_updates_an_unchanged_temporary_password_to_the_new_username(): void
+    public function test_passing_preserves_the_trainee_username_and_password(): void
     {
         $trainee = $this->trainee();
         $trainee->forceFill(['username' => 'DVXTR001', 'password' => 'DVXTR001'])->save();
         $admin = User::factory()->create(['role' => 'admin', 'status' => 'active', 'username' => 'DVX005']);
         $this->actingAs($admin)->patch('/trainees/'.$trainee->id.'/review', ['decision' => 'graduated'])->assertRedirect();
         $trainee->refresh();
-        $this->assertSame('DVX006', $trainee->username);
-        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('DVX006', $trainee->password));
-        $this->assertFalse(\Illuminate\Support\Facades\Hash::check('DVXTR001', $trainee->password));
+        $this->assertSame('DVXTR001', $trainee->username);
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('DVXTR001', $trainee->password));
+        $this->assertSame('trainee', $trainee->role);
     }
 
     public function test_trainee_numbers_do_not_consume_official_numbers_and_graduation_allocates_next_number(): void
@@ -39,12 +39,15 @@ class TraineePortalTest extends TestCase
         $this->assertSame('DVXTR1000', $numbers->next(trainee: true));
         $password = $trainee->password;
         $this->actingAs($admin)->patch('/trainees/'.$trainee->id.'/review', ['decision' => 'graduated'])->assertRedirect();
-        $this->assertSame('DVX010', $trainee->fresh()->username);
+        $this->assertSame('DVXTR001', $trainee->fresh()->username);
         $this->assertSame($password, $trainee->fresh()->password);
+        $this->assertSame('DVX010', $numbers->next());
+        $this->post('/trainees/'.$trainee->id.'/employee-account')->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame('DVX010', $trainee->employeeAccount->username);
         $this->assertSame('DVX011', $numbers->next());
-        $this->patch('/trainees/'.$trainee->id.'/review', ['decision' => 'graduated'])->assertStatus(409);
+        $this->post('/trainees/'.$trainee->id.'/employee-account')->assertSessionHasErrors('employee');
         $this->assertSame('DVX011', $numbers->next());
-        $this->assertDatabaseHas('assessment_activity_logs', ['action' => 'trainee.graduated', 'target_id' => $trainee->id]);
+        $this->assertDatabaseHas('assessment_activity_logs', ['action' => 'Account status changed', 'target_id' => $trainee->id]);
     }
 
     public function test_number_allocation_rolls_back_and_does_not_reuse_consumed_numbers(): void
@@ -113,10 +116,10 @@ class TraineePortalTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin', 'status' => 'active']);
         $this->actingAs($admin)->patch('/employees/'.$trainee->id.'/role', ['position' => 'Agent'])->assertSessionHasErrors('position');
         $this->patch($url, ['decision' => 'graduated'])->assertRedirect();
-        $this->assertDatabaseHas('users', ['id' => $trainee->id, 'role' => 'agent', 'training_status' => 'graduated', 'training_reviewed_by' => $admin->id]);
+        $this->assertDatabaseHas('users', ['id' => $trainee->id, 'role' => 'trainee', 'training_status' => 'graduated', 'training_reviewed_by' => $admin->id]);
         $this->assertDatabaseHas('attendance_records', ['user_id' => $trainee->id]);
-        $this->patch($url, ['decision' => 'rejected', 'notes' => 'Repeat'])->assertStatus(409);
-        $this->actingAs($trainee->fresh())->get('/my-records')->assertOk();
+        $this->actingAs($trainee->fresh())->get('/my-attendance')->assertOk();
+        $this->get('/my-records')->assertForbidden();
     }
 
     public function test_rejection_requires_reason_and_blocks_existing_sessions_and_opaque_urls(): void
@@ -126,13 +129,14 @@ class TraineePortalTest extends TestCase
         $url = '/trainees/'.$trainee->id.'/review';
         $this->actingAs($admin)->patch($url, ['decision' => 'rejected'])->assertSessionHasErrors('notes');
         $this->patch($url, ['decision' => 'rejected', 'notes' => 'Did not complete training'])->assertRedirect();
-        $this->actingAs($trainee)->get('/my-attendance')->assertForbidden();
-        $this->get('/my-coaching')->assertForbidden();
-        $this->get('/settings/profile')->assertForbidden();
-        $this->postJson('/my-attendance/challenge', ['action' => 'time_in'])->assertForbidden();
+        $this->actingAs($trainee)->get('/my-attendance')->assertRedirect('/login');
+        $this->assertGuest();
+        $this->get('/my-coaching')->assertRedirect('/login');
+        $this->get('/settings/profile')->assertRedirect('/login');
+        $this->postJson('/my-attendance/challenge', ['action' => 'time_in'])->assertUnauthorized();
         config(['navigation.opaque_urls' => true]);
         $opaque = app(\App\Services\OpaquePageUrls::class)->encode('/my-attendance');
-        $this->get($opaque)->assertForbidden();
+        $this->get($opaque)->assertRedirect('/login');
         $this->post('/logout')->assertRedirect();
     }
 }

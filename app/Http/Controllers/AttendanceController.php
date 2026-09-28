@@ -8,6 +8,7 @@ use App\Services\AttendanceScheduleService;
 use App\Services\TeamLeaderWorkspaceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -41,13 +42,14 @@ class AttendanceController extends Controller
             ->whereNotNull('username')
             ->orderBy('username')
             ->get()
-            ->map(function (User $user) use ($records, $schedules, $date): array {
+            ->map(function (User $user) use ($records, $schedules, $date, $actor): array {
                 /** @var AttendanceRecord|null $record */
                 $record = $schedules->calculate($user, $date, $records->get($user->id));
                 $schedule = $record->schedule_snapshot;
 
                 return [
                     'id' => $user->id,
+                    'canEdit' => $actor->role === 'admin' || (in_array($user->role, ['agent', 'trainee'], true) && $user->id !== $actor->id),
                     'employeeId' => $user->username,
                     'name' => $user->name,
                     'avatar' => $user->avatar,
@@ -68,7 +70,7 @@ class AttendanceController extends Controller
             });
 
         return Inertia::render('attendance', [
-            'canOverride' => ! $teamLeader,
+            'canOverride' => true,
             'isTeamLeader' => $teamLeader,
             'attendanceScope' => $ownRecords ? 'mine' : 'team',
             'attendanceDate' => $date,
@@ -78,7 +80,8 @@ class AttendanceController extends Controller
 
     public function overrideTime(Request $request, User $employee, AttendanceScheduleService $schedules): RedirectResponse
     {
-        abort_unless($request->user()?->role === 'admin', 403);
+        $actor = $request->user()->fresh();
+        abort_unless($actor->status === 'active' && ($actor->role === 'admin' || ($actor->role === 'team_leader' && app(TeamLeaderWorkspaceService::class)->members($actor)->whereKey($employee->id)->exists())), 403);
 
         $data = $request->validate([
             'attendance_date' => ['required', 'date_format:Y-m-d'],
@@ -87,7 +90,16 @@ class AttendanceController extends Controller
             'time' => ['present', 'nullable', 'date_format:H:i'],
         ]);
 
-        $schedules->record($employee, $data['attendance_date'], $data['field'], $data['time'], $data['time_date'] ?? null);
+        DB::transaction(function () use ($employee, $data, $schedules, $actor): void {
+            User::whereKey($employee->id)->lockForUpdate()->firstOrFail();
+            $before = AttendanceRecord::where('user_id', $employee->id)->whereDate('attendance_date', $data['attendance_date'])->first()?->toArray();
+            $schedules->record($employee, $data['attendance_date'], $data['field'], $data['time'], $data['time_date'] ?? null);
+            $after = AttendanceRecord::where('user_id', $employee->id)->whereDate('attendance_date', $data['attendance_date'])->first()?->toArray();
+            DB::table('assessment_activity_logs')->insert([
+                'actor_id' => $actor->id, 'action' => 'Attendance time corrected', 'target_type' => User::class, 'target_id' => $employee->id,
+                'metadata' => json_encode(['field' => $data['field'], 'date' => $data['attendance_date'], 'before' => $before, 'after' => $after], JSON_THROW_ON_ERROR), 'created_at' => now(),
+            ]);
+        });
 
         return to_route('attendance', ['date' => $data['attendance_date']])
             ->with('status', 'Attendance time updated successfully.');

@@ -27,6 +27,7 @@ import { DateTimeField } from '@/components/date-time-field';
 import EmployeeAvatar from '@/components/employee-avatar';
 
 type AttendanceEmployee = {
+    canEdit: boolean;
     id: number;
     employeeId: string;
     avatar: string;
@@ -569,67 +570,68 @@ export default function Attendance({
                                                                         entry.time,
                                                                     )}
                                                                 </span>
-                                                                {canOverride && (
-                                                                    <Tooltip
-                                                                        title={`Override ${entry.label}`}
-                                                                    >
-                                                                        <IconButton
-                                                                            size="small"
-                                                                            aria-label={`Override ${entry.label} for ${employee.name}`}
-                                                                            onClick={() => {
-                                                                                setOverrideError(
-                                                                                    '',
-                                                                                );
-                                                                                setTimeOverride(
-                                                                                    {
-                                                                                        employee,
-                                                                                        field: entry.field,
-                                                                                        label: entry.label,
-                                                                                        value: timeInputValue(
-                                                                                            employee
-                                                                                                .actualTimes[
-                                                                                                entry
-                                                                                                    .field
-                                                                                            ] ??
-                                                                                                entry.time,
-                                                                                        ),
-                                                                                        date: dateInputValue(
-                                                                                            employee
-                                                                                                .actualTimes[
-                                                                                                entry
-                                                                                                    .field
-                                                                                            ] ??
-                                                                                                entry.time ??
-                                                                                                scheduledTime(
-                                                                                                    employee,
-                                                                                                    entry.field,
-                                                                                                ) ??
-                                                                                                `${attendanceDate}T00:00:00+08:00`,
-                                                                                        ),
-                                                                                    },
-                                                                                );
-                                                                            }}
-                                                                            sx={{
-                                                                                width: 30,
-                                                                                height: 30,
-                                                                                color: '#ad2823',
-                                                                                bgcolor:
-                                                                                    '#fff1ef',
-                                                                                '&:hover':
-                                                                                    {
-                                                                                        bgcolor:
-                                                                                            '#ffe2df',
-                                                                                    },
-                                                                            }}
+                                                                {canOverride &&
+                                                                    employee.canEdit && (
+                                                                        <Tooltip
+                                                                            title={`Override ${entry.label}`}
                                                                         >
-                                                                            <TimeIcon
-                                                                                size={
-                                                                                    15
-                                                                                }
-                                                                            />
-                                                                        </IconButton>
-                                                                    </Tooltip>
-                                                                )}
+                                                                            <IconButton
+                                                                                size="small"
+                                                                                aria-label={`Override ${entry.label} for ${employee.name}`}
+                                                                                onClick={() => {
+                                                                                    setOverrideError(
+                                                                                        '',
+                                                                                    );
+                                                                                    setTimeOverride(
+                                                                                        {
+                                                                                            employee,
+                                                                                            field: entry.field,
+                                                                                            label: entry.label,
+                                                                                            value: timeInputValue(
+                                                                                                employee
+                                                                                                    .actualTimes[
+                                                                                                    entry
+                                                                                                        .field
+                                                                                                ] ??
+                                                                                                    entry.time,
+                                                                                            ),
+                                                                                            date: dateInputValue(
+                                                                                                employee
+                                                                                                    .actualTimes[
+                                                                                                    entry
+                                                                                                        .field
+                                                                                                ] ??
+                                                                                                    entry.time ??
+                                                                                                    scheduledTime(
+                                                                                                        employee,
+                                                                                                        entry.field,
+                                                                                                    ) ??
+                                                                                                    `${attendanceDate}T00:00:00+08:00`,
+                                                                                            ),
+                                                                                        },
+                                                                                    );
+                                                                                }}
+                                                                                sx={{
+                                                                                    width: 30,
+                                                                                    height: 30,
+                                                                                    color: '#ad2823',
+                                                                                    bgcolor:
+                                                                                        '#fff1ef',
+                                                                                    '&:hover':
+                                                                                        {
+                                                                                            bgcolor:
+                                                                                                '#ffe2df',
+                                                                                        },
+                                                                                }}
+                                                                            >
+                                                                                <TimeIcon
+                                                                                    size={
+                                                                                        15
+                                                                                    }
+                                                                                />
+                                                                            </IconButton>
+                                                                        </Tooltip>
+                                                                    )}
                                                             </div>
                                                         </td>
                                                     );

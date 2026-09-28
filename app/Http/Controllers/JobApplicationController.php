@@ -3,8 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\JobApplication;
+use App\Services\ApplicantExamService;
+use App\Services\PublicFormService;
+use App\Services\RecruitmentEmailService;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -13,9 +18,9 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class JobApplicationController extends Controller
 {
-    public function store(Request $request, \App\Services\RecruitmentEmailService $email): RedirectResponse
+    public function store(Request $request, RecruitmentEmailService $email): RedirectResponse
     {
-        $data = app(\App\Services\PublicFormService::class)->submission($request, 'application', [
+        $data = app(PublicFormService::class)->submission($request, 'application', [
             'first_name' => ['required', 'string', 'max:100'], 'last_name' => ['required', 'string', 'max:100'],
             'email' => ['required', 'email:rfc', 'max:255'], 'phone' => ['required', 'string', 'max:40'],
             'position' => ['required', Rule::in(['Customer Service Representative', 'Other'])],
@@ -32,7 +37,16 @@ class JobApplicationController extends Controller
             $data = [...$data, 'resume_disk' => 'local', 'resume_path' => $path, 'resume_original_name' => $file->getClientOriginalName(), 'resume_mime' => $file->getMimeType(), 'resume_size' => $file->getSize()];
         }
         try {
-            $application = JobApplication::query()->create($data);
+            $application = DB::transaction(function () use ($request, $data) {
+                $attempt = app(ApplicantExamService::class)->grade($request);
+                $application = JobApplication::query()->create($data);
+                if ($attempt) {
+                    $attempt->job_application_id = $application->id;
+                    $attempt->save();
+                }
+
+                return $application;
+            });
         } catch (\Throwable $exception) {
             if (isset($data['resume_path'])) {
                 Storage::disk('local')->delete($data['resume_path']);
@@ -53,7 +67,7 @@ class JobApplicationController extends Controller
             ->when($filters['position'] ?? null, fn ($q, $value) => $q->where('position', $value));
 
         return Inertia::render('applicants/index', [
-            'emailConfigured' => app(\App\Services\RecruitmentEmailService::class)->configured(),
+            'emailConfigured' => app(RecruitmentEmailService::class)->configured(),
             'recruitmentInbox' => config('recruitment.inbox'),
             'statusMessage' => $request->session()->get('status'),
             'applications' => $query->latest()->paginate(15)->withQueryString()->through(function ($application) {
@@ -74,7 +88,7 @@ class JobApplicationController extends Controller
             'scheduled_start' => ['required_if:applicant_stage,for_screening,for_final_interview,passed', 'nullable', 'date_format:Y-m-d\TH:i'],
         ]);
         $scheduledStart = $data['applicant_stage'] !== 'failed'
-            ? \Carbon\CarbonImmutable::createFromFormat('Y-m-d\TH:i', $data['scheduled_start'], 'Asia/Manila')->startOfMinute()->utc()
+            ? CarbonImmutable::createFromFormat('Y-m-d\TH:i', $data['scheduled_start'], 'Asia/Manila')->startOfMinute()->utc()
             : null;
         unset($data['scheduled_start']);
         $legacyStatuses = match ($data['applicant_stage']) {
@@ -83,7 +97,7 @@ class JobApplicationController extends Controller
             'passed' => ['screening_status' => 'passed', 'interview_status' => 'passed', 'application_status' => 'hired'],
             'failed' => ['screening_status' => 'failed', 'interview_status' => 'failed', 'application_status' => 'rejected'],
         };
-        \Illuminate\Support\Facades\DB::transaction(function () use ($application, $data, $legacyStatuses, $request, $scheduledStart) {
+        DB::transaction(function () use ($application, $data, $legacyStatuses, $request, $scheduledStart) {
             $locked = JobApplication::query()->lockForUpdate()->findOrFail($application->id);
             $publicChanged = $locked->applicant_stage !== $data['applicant_stage']
                 || $locked->scheduled_start_at?->getTimestamp() !== $scheduledStart?->getTimestamp()
@@ -95,7 +109,7 @@ class JobApplicationController extends Controller
             }
             $locked->save();
         });
-        $sent = app(\App\Services\RecruitmentEmailService::class)->sendStatusUpdate($application);
+        $sent = app(RecruitmentEmailService::class)->sendStatusUpdate($application);
 
         return back()->with('status', 'Applicant review saved. '.match ($sent) {
             true => 'The applicant notification was accepted by the mail server.',
@@ -104,7 +118,7 @@ class JobApplicationController extends Controller
         });
     }
 
-    public function retryEmail(JobApplication $application, \App\Services\RecruitmentEmailService $email): RedirectResponse
+    public function retryEmail(JobApplication $application, RecruitmentEmailService $email): RedirectResponse
     {
         $sent = $email->send($application);
 

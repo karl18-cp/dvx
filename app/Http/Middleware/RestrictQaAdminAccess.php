@@ -21,12 +21,14 @@ class RestrictQaAdminAccess
         }
 
         $modules = [
+            'applicant-exams',
+            'training-plans',
             'assessments', 'question-bank', 'assessment-media', 'assessment-assignments',
             'assessment-assignment-schedule', 'assessment-employees', 'assessment-recipient-count',
             'assessment-reviews', 'assessment-results', 'assessment-results-export', 'assessment-teams',
             'training-library', 'campaign-analytics', 'coaching', 'qa-dashboard', 'call-evaluations', 'qa-scorecards',
         ];
-        $allowed = ['settings', 'settings/*', 'user/*', 'users/*/photo', 'notification-feed', 'notification-feed/*', 'management/employees/*/training-profile'];
+        $allowed = ['account-statuses', 'account-statuses/*', 'settings', 'settings/*', 'user/*', 'users/*/photo', 'notification-feed', 'notification-feed/*', 'management/employees/*/training-profile'];
         foreach ($modules as $module) {
             $allowed[] = 'management/'.$module;
             $allowed[] = 'management/'.$module.'/*';

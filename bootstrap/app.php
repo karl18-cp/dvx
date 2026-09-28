@@ -25,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->web(append: [
+            \App\Http\Middleware\EnsureActiveAccount::class,
             HandleAppearance::class,
             \App\Http\Middleware\RestrictTraineeAccess::class,
             \App\Http\Middleware\RestrictQaAdminAccess::class,

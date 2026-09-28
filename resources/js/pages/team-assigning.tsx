@@ -124,7 +124,7 @@ export default function TeamAssigning({ teams, teamLeaders, agents }: Props) {
         if (
             transfers.length > 0 &&
             !(await confirmAction(
-                `Transfer ${transfers.length} selected agent(s) to ${selectedTeam?.name}? Their current team membership will be replaced. Historical assessment and coaching records will not be changed.`,
+                `Transfer ${transfers.length} selected member(s) to ${selectedTeam?.name}? Their current team membership will be replaced. Historical assessment and coaching records will not be changed.`,
             ))
         ) {
             return;
@@ -198,7 +198,8 @@ export default function TeamAssigning({ teams, teamLeaders, agents }: Props) {
                                 Team Assigning
                             </h1>
                             <p className="mt-2 text-sm text-[#777b8e] sm:text-base">
-                                Assign one leader and selected agents to a team.
+                                Assign one leader and selected agents and
+                                trainees to a team.
                             </p>
                         </div>
                         <Button
@@ -231,7 +232,7 @@ export default function TeamAssigning({ teams, teamLeaders, agents }: Props) {
                                 </h2>
                                 <p className="text-sm text-[#888b9b]">
                                     Team leaders can manage multiple teams;
-                                    agents belong to only one.
+                                    agents and trainees belong to only one.
                                 </p>
                             </div>
                         </div>
@@ -314,11 +315,11 @@ export default function TeamAssigning({ teams, teamLeaders, agents }: Props) {
                             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
                                 <div>
                                     <h3 className="text-lg font-bold text-[#202230]">
-                                        Agents
+                                        Agents & trainees
                                     </h3>
                                     <p className="mt-1 text-sm text-[#777b8e]">
-                                        Only agents currently assigned to the
-                                        selected team are shown.
+                                        Only agents and trainees currently
+                                        assigned to the selected team are shown.
                                     </p>
                                 </div>
                                 <div className="flex flex-col gap-2 sm:flex-row">
@@ -329,7 +330,7 @@ export default function TeamAssigning({ teams, teamLeaders, agents }: Props) {
                                             onChange={(event) =>
                                                 setSearch(event.target.value)
                                             }
-                                            placeholder="Search agents..."
+                                            placeholder="Search team members..."
                                             className="h-11 w-full rounded-xl border border-[#e1e2e8] bg-white pr-4 pl-11 text-sm outline-none"
                                         />
                                     </label>
@@ -360,7 +361,9 @@ export default function TeamAssigning({ teams, teamLeaders, agents }: Props) {
                                     <thead>
                                         <tr className="bg-[#fafafd] text-[11px] font-bold tracking-[0.06em] text-[#555869] uppercase">
                                             <th className="w-14 px-4 py-4"></th>
-                                            <th className="px-4 py-4">Agent</th>
+                                            <th className="px-4 py-4">
+                                                Member
+                                            </th>
                                             <th className="px-4 py-4">Email</th>
                                             <th className="px-4 py-4">
                                                 Current Campaign
@@ -391,8 +394,8 @@ export default function TeamAssigning({ teams, teamLeaders, agents }: Props) {
                                                     className="px-6 py-12 text-center text-sm text-[#888b9b]"
                                                 >
                                                     {search.trim()
-                                                        ? 'No agents in this team match your search.'
-                                                        : 'No agents are currently assigned to this team.'}
+                                                        ? 'No members in this team match your search.'
+                                                        : 'No members are currently assigned to this team.'}
                                                 </td>
                                             </tr>
                                         ) : (
@@ -402,9 +405,9 @@ export default function TeamAssigning({ teams, teamLeaders, agents }: Props) {
                                                     selectedAgentIds.includes(
                                                         agent.id,
                                                     ) &&
-                                                        agent.currentTeamId &&
-                                                        agent.currentTeamId !==
-                                                            selectedTeam.id,
+                                                    agent.currentTeamId &&
+                                                    agent.currentTeamId !==
+                                                        selectedTeam.id,
                                                 );
 
                                                 return (
@@ -454,7 +457,8 @@ export default function TeamAssigning({ teams, teamLeaders, agents }: Props) {
                                                                     </span>
                                                                     {willTransfer && (
                                                                         <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
-                                                                            Will transfer
+                                                                            Will
+                                                                            transfer
                                                                         </span>
                                                                     )}
                                                                 </div>
@@ -475,7 +479,9 @@ export default function TeamAssigning({ teams, teamLeaders, agents }: Props) {
                                                                 variant="outlined"
                                                                 startIcon={
                                                                     <ArrowRightLeft
-                                                                        size={15}
+                                                                        size={
+                                                                            15
+                                                                        }
                                                                     />
                                                                 }
                                                                 disabled={
@@ -537,7 +543,8 @@ export default function TeamAssigning({ teams, teamLeaders, agents }: Props) {
                         {teams
                             .filter(
                                 (team) =>
-                                    team.id !== transferCandidate?.currentTeamId,
+                                    team.id !==
+                                    transferCandidate?.currentTeamId,
                             )
                             .map((team) => (
                                 <MenuItem key={team.id} value={String(team.id)}>

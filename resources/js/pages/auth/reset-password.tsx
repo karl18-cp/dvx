@@ -26,10 +26,10 @@ export default function ResetPassword({ token, email, passwordRules }: Props) {
                 {({ processing, errors }) => (
                     <div className="grid gap-6">
                         <div className="grid gap-2">
-                            <Label htmlFor="email">Email</Label>
+                            <Label htmlFor="email">Account ID or email</Label>
                             <Input
                                 id="email"
-                                type="email"
+                                type="text"
                                 name="email"
                                 autoComplete="email"
                                 value={email}

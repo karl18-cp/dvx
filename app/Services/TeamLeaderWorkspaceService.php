@@ -16,7 +16,7 @@ class TeamLeaderWorkspaceService
 
     public function members(User $leader)
     {
-        return User::where('role', 'agent')->whereHas('teamMembership', fn ($q) => $q->whereIn('team_id', $this->teams($leader)->select('teams.id')));
+        return User::whereIn('role', ['agent', 'trainee'])->whereHas('teamMembership', fn ($q) => $q->whereIn('team_id', $this->teams($leader)->select('teams.id')));
     }
 
     public function summary(User $leader): array

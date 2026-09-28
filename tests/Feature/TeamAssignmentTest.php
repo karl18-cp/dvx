@@ -56,7 +56,7 @@ class TeamAssignmentTest extends TestCase
             'team_leader_id' => $leader->id,
             'agent_ids' => [$agent->id],
         ])->assertRedirect(route('team-assigning'))
-            ->assertSessionHas('status', 'Team assignment saved successfully. 1 agent(s) transferred from their previous team.');
+            ->assertSessionHas('status', 'Team assignment saved successfully. 1 team member(s) transferred from their previous team.');
 
         $this->assertDatabaseMissing('team_members', ['team_id' => $firstTeam->id, 'user_id' => $agent->id]);
         $this->assertDatabaseHas('team_members', ['team_id' => $secondTeam->id, 'user_id' => $agent->id]);

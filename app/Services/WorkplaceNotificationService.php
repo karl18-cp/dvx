@@ -5,10 +5,15 @@ namespace App\Services;
 use App\Models\Announcement;
 use App\Models\AssessmentNotification;
 use App\Models\AttendanceRecord;
+use App\Models\CallEvaluation;
+use App\Models\EmployeeForm;
 use App\Models\EmployeeSanction;
 use App\Models\EodReport;
 use App\Models\LeaveRequest;
 use App\Models\OvertimeRequest;
+use App\Models\SatisfactionRating;
+use App\Models\Team;
+use App\Models\TrackerTaskAssignment;
 use App\Models\UndertimeRequest;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -102,9 +107,41 @@ class WorkplaceNotificationService
                 }
             }
         }
+        $this->activities($user, $since);
         // Remove alerts whose source was deleted, corrected, or is no longer
         // visible to this recipient (including a changed admin role).
         AssessmentNotification::where('recipient_id', $user->id)->where('deduplication_key', 'like', "workplace:{$user->id}:%")->whereNotIn('deduplication_key', $this->activeKeys)->delete();
+    }
+
+    private function activities(User $user, $since): void
+    {
+        if (in_array($user->role, ['admin', 'team_leader'], true)) {
+            $assignments = TrackerTaskAssignment::with('task')->whereHas('task')
+                ->where('updated_at', '>=', $since)
+                ->where(fn ($q) => $q->where('user_id', $user->id)->when($user->role === 'admin', fn ($q) => $q->orWhere('status', 'pending_review')))->get();
+            foreach ($assignments as $assignment) {
+                if ($assignment->user_id === $user->id) {
+                    $this->notify($user, 'task', $assignment->id.':assigned', 'Task assigned: '.$assignment->task->title, $assignment->task->description ?? 'Open Task Tracker to view your checklist.', '/task-tracker', $assignment->created_at);
+                    if ($assignment->reviewed_at) {
+                        $this->notify($user, 'task', $assignment->id.':review:'.$assignment->reviewed_at->getTimestamp(), $assignment->status === 'approved_done' ? 'Task completion approved' : 'Task returned for updates', $assignment->task->title."\n".($assignment->review_notes ?? ''), '/task-tracker', $assignment->reviewed_at);
+                    }
+                } elseif ($assignment->status === 'pending_review') {
+                    $this->notify($user, 'task', $assignment->id.':submitted:'.$assignment->version, 'Task awaiting your review', $assignment->assignee_name.' · '.$assignment->task->title, '/task-tracker', $assignment->submitted_at ?? $assignment->updated_at);
+                }
+            }
+        }
+        foreach (SatisfactionRating::where('employee_id', $user->id)->where('created_at', '>=', $since)->get() as $rating) {
+            $this->notify($user, 'satisfaction', (string) $rating->id, 'New satisfaction rating', 'Average: '.$rating->average." / 5\n".($rating->comments ?? ''), null, $rating->created_at);
+        }
+        foreach (CallEvaluation::where('employee_id', $user->id)->whereNotNull('finalized_at')->where('finalized_at', '>=', $since)->get() as $evaluation) {
+            $this->notify($user, 'evaluation', (string) $evaluation->id, 'Your call evaluation is ready', ($evaluation->scorecard_name ?? 'Call evaluation').' · '.$evaluation->percentage."%\n".($evaluation->overall_feedback ?? ''), null, $evaluation->finalized_at);
+        }
+        if (in_array($user->role, ['agent', 'team_leader'], true)) {
+            $teams = $user->role === 'team_leader' ? app(TeamLeaderWorkspaceService::class)->teams($user) : Team::whereHas('members', fn ($q) => $q->where('user_id', $user->id));
+            foreach (EmployeeForm::where('status', 'active')->where('updated_at', '>=', $since)->whereHas('teams', fn ($q) => $q->whereIn('teams.id', $teams->select('teams.id')))->get() as $form) {
+                $this->notify($user, 'form', $form->id.':'.$form->revision, 'Team form available: '.$form->title, $form->description ?? 'A form is available for your assigned team.', null, $form->updated_at);
+            }
+        }
     }
 
     private function notify(User $user, string $type, string $key, string $title, string $message, ?string $url, $date): void

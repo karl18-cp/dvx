@@ -38,6 +38,9 @@ class PersonalAttendanceClock
             $problem = $candidates ? null : 'No working shift is available now. You can time in up to four hours before your assigned shift.';
         }
         $record = $schedules->calculate($user, $date, $open);
+        if ($user->role === 'trainee' && $user->training_status === 'graduated') {
+            $problem = 'Your training is complete. Your trainee attendance history remains available; use your employee account for new attendance.';
+        }
         if ($record->approval_snapshot['leave']) {
             $problem = 'You have approved leave for this shift. Contact an administrator if you need to work.';
         }

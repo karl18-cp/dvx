@@ -103,14 +103,14 @@ class TeamLeaderWorkspaceTest extends TestCase
         $this->apply($agent);
         $this->apply($other);
         $this->actingAs($leader)->get('/my-team')->assertOk()->assertInertia(fn (Assert $page) => $page->component('my-team')->has('members', 1)->where('members.0.id', $agent->id)->where('summary.pendingRequests', 1));
-        $this->get('/attendance')->assertOk()->assertInertia(fn (Assert $page) => $page->where('canOverride', false)->has('employees', 2));
+        $this->get('/attendance')->assertOk()->assertInertia(fn (Assert $page) => $page->where('canOverride', true)->has('employees', 2));
         $this->get('/attendance?scope=mine&date=2026-09-24&user_id='.$other->id)->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('attendanceScope', 'mine')->where('attendanceDate', '2026-09-24')->where('canOverride', false)
+            ->where('attendanceScope', 'mine')->where('attendanceDate', '2026-09-24')->where('canOverride', true)
             ->has('employees', 1)->where('employees.0.id', $leader->id));
         $this->get('/leave-requests?scope=team')->assertOk()->assertInertia(fn (Assert $page) => $page->component('leave-requests')->has('requests.data', 1)->where('requests.data.0.employeeId', 'AGENT'));
         $this->get('/leave-requests')->assertOk()->assertInertia(fn (Assert $page) => $page->has('requests.data', 0));
         $this->get('/employees')->assertForbidden();
-        $this->put(route('attendance.override-time', $agent), [])->assertForbidden();
+        $this->put(route('attendance.override-time', $leader), [])->assertForbidden();
         $this->actingAs($agent)->get('/my-team')->assertForbidden();
         $this->get('/leave-requests?scope=team')->assertForbidden();
         $leader->update(['status' => 'inactive']);

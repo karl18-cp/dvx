@@ -4,12 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreEmployeeRequest;
 use App\Http\Requests\UpdateEmployeeRequest;
+use App\Models\Campaign;
 use App\Models\User;
+use App\Services\AccountStatusService;
+use App\Services\EmployeeNumberService;
 use App\Services\EmployeeRoleService;
+use App\Services\EmployeeWelcomeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -49,10 +54,10 @@ class EmployeeController extends Controller
             ]);
 
         return Inertia::render('employees', [
-            'trainingCampaigns' => \App\Models\Campaign::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'trainingCampaigns' => Campaign::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'createTrainee' => $request->query('create') === 'trainee',
-            'nextEmployeeId' => app(\App\Services\EmployeeNumberService::class)->next(),
-            'nextTraineeId' => app(\App\Services\EmployeeNumberService::class)->next(trainee: true),
+            'nextEmployeeId' => app(EmployeeNumberService::class)->next(),
+            'nextTraineeId' => app(EmployeeNumberService::class)->next(trainee: true),
             'canManageEmployees' => $request->user()?->role === 'admin',
             'statusMessage' => $request->session()->get('status'),
             'employees' => $employees,
@@ -67,12 +72,12 @@ class EmployeeController extends Controller
         ]);
     }
 
-    public function store(StoreEmployeeRequest $request, \App\Services\EmployeeWelcomeService $welcome): RedirectResponse
+    public function store(StoreEmployeeRequest $request, EmployeeWelcomeService $welcome): RedirectResponse
     {
         $data = $request->validated();
 
         $user = DB::transaction(function () use ($data): User {
-            $employeeId = app(\App\Services\EmployeeNumberService::class)->next(trainee: $data['position'] === 'Trainee', allocate: true);
+            $employeeId = app(EmployeeNumberService::class)->next(trainee: $data['position'] === 'Trainee', allocate: true);
 
             $role = $this->roleValue($data['position']);
 
@@ -130,10 +135,15 @@ class EmployeeController extends Controller
 
         DB::transaction(function () use ($data, $employee, $request, $roles): void {
             $roles->change($request->user(), $employee, $this->roleValue($data['position']));
+            if ($data['status'] !== $employee->status) {
+                if ($employee->role === 'trainee') {
+                    throw ValidationException::withMessages(['status' => 'Use Employee Status to choose Active Trainee, Passed, or Failed.']);
+                }
+                app(AccountStatusService::class)->update($request->user(), $employee, $data['status']);
+            }
             $employee->update([
                 'name' => $data['full_name'],
                 'email' => $data['email'],
-                'status' => $data['status'],
                 ...(! empty($data['new_password']) ? ['password' => $data['new_password']] : []),
             ]);
 

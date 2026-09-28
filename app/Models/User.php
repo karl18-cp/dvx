@@ -38,6 +38,22 @@ class User extends Authenticatable implements PasskeyUser
 {
     protected $appends = ['avatar'];
 
+    public function canAccessAccount(): bool
+    {
+        return $this->status === 'active' && ($this->role !== 'trainee' || in_array($this->training_status, ['in_training', 'graduated'], true));
+    }
+
+    public function employeeAccount(): HasOne
+    {
+        return $this->hasOne(self::class, 'source_trainee_id');
+    }
+
+    public function getEmailForPasswordReset(): string
+    {
+        // Reset tokens belong to one account even when linked accounts share a mailbox.
+        return 'account:'.$this->id;
+    }
+
     public function getAvatarAttribute(): string
     {
         return $this->profile_photo_path

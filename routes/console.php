@@ -1,7 +1,9 @@
 <?php
 
+use App\Models\WorkplaceEmailDelivery;
 use App\Services\AssessmentScheduleService;
 use App\Services\CampaignIntegrityService;
+use App\Services\WorkplaceEmailService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -15,6 +17,30 @@ Artisan::command('assessments:process-schedule', function (AssessmentScheduleSer
 })->purpose('Publish scheduled assessments and create assessment reminders');
 
 Schedule::command('assessments:process-schedule')->everyTenMinutes()->withoutOverlapping();
+
+Artisan::command('workplace:email-notifications', function (WorkplaceEmailService $service) {
+    $this->info('New email deliveries: '.$service->collect());
+})->purpose('Collect relevant employee alerts and queue email delivery');
+
+Artisan::command('workplace:email-chat', function (WorkplaceEmailService $service) {
+    $this->info('New message digests: '.$service->collectChat());
+})->purpose('Queue unread DiverText summaries without exposing message content');
+
+Artisan::command('workplace:email-rankings', function (WorkplaceEmailService $service) {
+    $this->info('New weekly summaries: '.$service->collectWeekly());
+})->purpose('Queue last week ranking progress with recipient-scoped results');
+
+Artisan::command('workplace:email-retry', function (WorkplaceEmailService $service) {
+    $count = WorkplaceEmailDelivery::where('status', 'failed')->update(['status' => 'pending', 'attempts' => 0, 'queued_at' => null]);
+    if ($service->start()) {
+        $service->dispatchPending();
+    }
+    $this->info('Failed deliveries reset for retry: '.$count);
+})->purpose('Retry failed employee email deliveries without resending successful mail');
+
+Schedule::command('workplace:email-notifications')->everyMinute()->withoutOverlapping();
+Schedule::command('workplace:email-chat')->everyFifteenMinutes()->withoutOverlapping();
+Schedule::command('workplace:email-rankings')->weeklyOn(1, '09:00')->timezone('Asia/Manila')->withoutOverlapping();
 
 Artisan::command('campaigns:integrity', function (CampaignIntegrityService $service) {
     $result = $service->inspect();

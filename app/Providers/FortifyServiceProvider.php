@@ -4,17 +4,26 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
+use App\Http\Controllers\AccountPasswordController;
 use App\Models\User;
+use App\Services\AccountIdentity;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
+use Laravel\Fortify\Http\Controllers\NewPasswordController;
+use Laravel\Fortify\Http\Controllers\PasswordResetLinkController;
 
 class FortifyServiceProvider extends ServiceProvider
 {
@@ -23,7 +32,8 @@ class FortifyServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(PasswordResetLinkController::class, AccountPasswordController::class);
+        $this->app->bind(NewPasswordController::class, AccountPasswordController::class);
     }
 
     /**
@@ -35,6 +45,13 @@ class FortifyServiceProvider extends ServiceProvider
         $this->configureAuthentication();
         $this->configureViews();
         $this->configureRateLimiting();
+        Event::listen(Login::class, function ($event): void {
+            if ($event->user instanceof User && ! $event->user->fresh()->canAccessAccount()) {
+                Auth::guard($event->guard)->logout();
+                throw ValidationException::withMessages(['email' => 'Your account is not active. Contact your administrator.']);
+            }
+        });
+        ResetPassword::createUrlUsing(fn ($user, $token) => route('password.reset', ['token' => $token, 'email' => $user->username ?: $user->email]));
     }
 
     /**
@@ -46,13 +63,10 @@ class FortifyServiceProvider extends ServiceProvider
             $login = trim((string) $request->input('email'));
             $normalizedLogin = Str::lower($login);
 
-            $user = User::query()
-                ->whereRaw('LOWER(username) = ?', [$normalizedLogin])
-                ->orWhereRaw('LOWER(email) = ?', [$normalizedLogin])
-                ->first();
+            $user = app(AccountIdentity::class)->resolve($normalizedLogin);
 
             return $user
-                && $user->status === 'active'
+                && $user->canAccessAccount()
                 && Hash::check((string) $request->input('password'), $user->password)
                 ? $user
                 : null;

@@ -17,11 +17,11 @@ class RestrictTraineeAccess
             if ($request->is('/', 'logout')) {
                 return $next($request);
             }
-            abort_unless($user->status === 'active' && $user->training_status === 'in_training', 403, 'Your training access has ended. Please contact your administrator.');
+            abort_unless($user->canAccessAccount(), 403, 'Your training access has ended. Please contact your administrator.');
             if ($request->is('dashboard')) {
                 return redirect('/my-attendance');
             }
-            abort_unless($request->is('my-attendance', 'my-attendance/*', 'assessments', 'assessments/*', 'my-coaching', 'my-coaching/*', 'settings', 'settings/*', 'user/*', 'notification-feed', 'notification-feed/*', 'users/*/photo'), 403);
+            abort_unless($request->is('my-training-plan', 'my-attendance', 'my-attendance/*', 'assessments', 'assessments/*', 'my-coaching', 'my-coaching/*', 'settings', 'settings/*', 'user/*', 'notification-feed', 'notification-feed/*', 'users/*/photo'), 403);
         }
 
         return $next($request);

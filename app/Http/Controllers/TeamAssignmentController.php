@@ -6,6 +6,7 @@ use App\Models\Team;
 use App\Models\TeamLeaderAssignment;
 use App\Models\TeamMember;
 use App\Models\User;
+use App\Services\TraineeTeamService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -47,12 +48,13 @@ class TeamAssignmentController extends Controller
                 ]),
             'agents' => User::query()
                 ->with('teamMembership.team.campaign:id,name,abbreviation')
-                ->where('role', 'agent')
+                ->whereIn('role', ['agent', 'trainee'])
                 ->where('status', 'active')
                 ->orderBy('name')
-                ->get(['id', 'username', 'name', 'email'])
+                ->get(['id', 'username', 'name', 'email', 'role'])
                 ->map(fn (User $agent): array => [
                     'id' => $agent->id,
+                    'role' => $agent->role,
                     'employeeId' => $agent->username,
                     'name' => $agent->name,
                     'email' => $agent->email,
@@ -68,9 +70,9 @@ class TeamAssignmentController extends Controller
         $this->authorizeAdmin($request);
         $data = $request->validate([
             'team_id' => ['required', 'integer', Rule::exists('teams', 'id')],
-            'team_leader_id' => ['required', 'integer', Rule::exists('users', 'id')->where('role', 'team_leader')],
+            'team_leader_id' => ['required', 'integer', Rule::exists('users', 'id')->where('role', 'team_leader')->where('status', 'active')],
             'agent_ids' => ['array'],
-            'agent_ids.*' => ['integer', 'distinct', Rule::exists('users', 'id')->where('role', 'agent')],
+            'agent_ids.*' => ['integer', 'distinct', Rule::exists('users', 'id')->whereIn('role', ['agent', 'trainee'])],
         ]);
 
         $agentIds = collect($data['agent_ids'] ?? [])->map(fn (mixed $id): int => (int) $id)->unique()->values();
@@ -79,6 +81,11 @@ class TeamAssignmentController extends Controller
                 ['team_id' => $data['team_id']],
                 ['user_id' => $data['team_leader_id']],
             );
+
+            $team = Team::findOrFail($data['team_id']);
+            foreach (User::whereIn('id', $agentIds)->lockForUpdate()->get() as $member) {
+                app(TraineeTeamService::class)->validateTeam($member, $team, 'agent_ids');
+            }
 
             $existingMemberships = TeamMember::query()
                 ->whereIn('user_id', $agentIds)
@@ -110,7 +117,7 @@ class TeamAssignmentController extends Controller
 
         $message = 'Team assignment saved successfully.';
         if ($transferred > 0) {
-            $message .= " {$transferred} agent(s) transferred from their previous team.";
+            $message .= " {$transferred} team member(s) transferred from their previous team.";
         }
 
         return to_route('team-assigning')->with('status', $message);
@@ -120,7 +127,7 @@ class TeamAssignmentController extends Controller
     {
         $this->authorizeAdmin($request);
         $data = $request->validate([
-            'agent_id' => ['required', 'integer', Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'agent')->where('status', 'active'))],
+            'agent_id' => ['required', 'integer', Rule::exists('users', 'id')->where(fn ($query) => $query->whereIn('role', ['agent', 'trainee'])->where('status', 'active'))],
             'team_id' => ['required', 'integer', Rule::exists('teams', 'id')],
         ]);
 
@@ -129,6 +136,8 @@ class TeamAssignmentController extends Controller
         $oldTeam = null;
 
         DB::transaction(function () use ($data, $team, $agent, $request, &$oldTeam): void {
+            $agent = User::whereKey($agent->id)->lockForUpdate()->firstOrFail();
+            app(TraineeTeamService::class)->validateTeam($agent, $team);
             $membership = TeamMember::query()->where('user_id', $data['agent_id'])->lockForUpdate()->first();
             $oldTeam = $membership?->team()->with('campaign:id,name')->first();
 

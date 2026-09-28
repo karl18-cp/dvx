@@ -12,13 +12,17 @@ import {
     Users,
 } from 'lucide-react';
 import { useState } from 'react';
+import ApplicantExam from '@/components/applicant-exam';
+import type {ExamConfig} from '@/components/applicant-exam';
 import BusinessInquiryDialog from '@/components/business-inquiry-dialog';
 import { PublicFormFields } from '@/components/public-form-fields';
 import type { PublicFormDefinition } from '@/components/public-form-fields';
 
 export default function Welcome({
     publicForms,
+    applicantExam,
 }: {
+    applicantExam: ExamConfig;
     publicForms: {
         application: PublicFormDefinition;
         business: PublicFormDefinition;
@@ -37,6 +41,8 @@ export default function Welcome({
         message: '',
         resume: null as File | null,
         custom_fields: {} as Record<string, string | boolean>,
+        exam_attempt_id: '',
+        exam_answers: {} as Record<string, string>,
     });
     const [applicationSubmitted, setApplicationSubmitted] = useState(false);
     const submit = (event: React.FormEvent) => {
@@ -676,6 +682,33 @@ export default function Welcome({
                                     }}
                                 />
                             </div>
+                            <ApplicantExam
+                                config={applicantExam}
+                                attemptId={form.data.exam_attempt_id}
+                                answers={form.data.exam_answers}
+                                onStart={(id) =>
+                                    form.setData((data) => ({
+                                        ...data,
+                                        exam_attempt_id: id,
+                                        exam_answers:
+                                            data.exam_attempt_id === id
+                                                ? data.exam_answers
+                                                : {},
+                                    }))
+                                }
+                                onAnswer={(id, answer) =>
+                                    form.setData('exam_answers', {
+                                        ...form.data.exam_answers,
+                                        [id]: answer,
+                                    })
+                                }
+                                error={
+                                    (form.errors as Record<string, string>)
+                                        .exam ||
+                                    form.errors.exam_attempt_id ||
+                                    form.errors.exam_answers
+                                }
+                            />
                             <div className="flex items-center justify-between gap-4 sm:col-span-2">
                                 <p className="text-xs text-slate-500">
                                     By submitting, you confirm that your

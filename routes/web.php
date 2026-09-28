@@ -55,7 +55,8 @@ Route::get('/', function (Request $request) {
 
     return to_route('careers');
 })->name('home');
-Route::get('/careers', fn (\App\Services\PublicFormService $forms) => \Inertia\Inertia::render('welcome', ['publicForms' => ['application' => $forms->definition('application'), 'business' => $forms->definition('business')]]))->name('careers');
+Route::get('/careers', fn (\App\Services\PublicFormService $forms, \App\Services\ApplicantExamService $exams) => \Inertia\Inertia::render('welcome', ['applicantExam' => $exams->publicSettings(), 'publicForms' => ['application' => $forms->definition('application'), 'business' => $forms->definition('business')]]))->name('careers');
+Route::post('application-exam/start', [\App\Http\Controllers\ApplicantExamController::class, 'start'])->middleware('throttle:6,10');
 Route::post('business-inquiries', [\App\Http\Controllers\BusinessInquiryController::class, 'store'])->middleware('throttle:5,10')->name('business-inquiries.store');
 Route::inertia('/applicant-portal', 'applicant-portal')->name('applicant-portal');
 Route::post('apply', [JobApplicationController::class, 'store'])->middleware('throttle:5,1')->name('applications.store');
@@ -63,12 +64,27 @@ Route::get('application-status/challenge', [ApplicantStatusController::class, 'c
 Route::post('application-status', [ApplicantStatusController::class, 'lookup'])->middleware('throttle:5,10')->name('application-status.lookup');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('management/applicant-exams', [\App\Http\Controllers\ApplicantExamController::class, 'index']);
+    Route::put('management/applicant-exams/settings', [\App\Http\Controllers\ApplicantExamController::class, 'settings']);
+    Route::post('management/applicant-exams/questions', [\App\Http\Controllers\ApplicantExamController::class, 'question']);
+    Route::put('management/applicant-exams/questions/{question}', [\App\Http\Controllers\ApplicantExamController::class, 'question']);
+    Route::post('management/applicant-exams/generate', [\App\Http\Controllers\ApplicantExamController::class, 'generate'])->middleware('throttle:2,1');
+    Route::get('management/applicant-exams/results/{attempt}', [\App\Http\Controllers\ApplicantExamController::class, 'result']);
     Route::get('public-form-settings', [\App\Http\Controllers\PublicFormSettingsController::class, 'index'])->name('public-form-settings');
     Route::put('public-form-settings/{kind}', [\App\Http\Controllers\PublicFormSettingsController::class, 'update'])->name('public-form-settings.update');
     Route::get('business-inquiries', [\App\Http\Controllers\BusinessInquiryController::class, 'index'])->name('business-inquiries.index');
     Route::patch('business-inquiries/{inquiry}', [\App\Http\Controllers\BusinessInquiryController::class, 'update'])->name('business-inquiries.update');
     Route::post('business-inquiries/{inquiry}/email', [\App\Http\Controllers\BusinessInquiryController::class, 'retry'])->middleware('throttle:5,1')->name('business-inquiries.email');
     Route::get('trainees', [\App\Http\Controllers\TraineeController::class, 'index'])->name('trainees');
+    Route::put('trainees/{trainee}/team', [\App\Http\Controllers\TraineeController::class, 'assignTeam']);
+    Route::post('trainees/{trainee}/employee-account', [\App\Http\Controllers\TraineeController::class, 'createEmployee']);
+    Route::get('account-statuses', [\App\Http\Controllers\AccountStatusController::class, 'index']);
+    Route::patch('account-statuses/{employee}', [\App\Http\Controllers\AccountStatusController::class, 'update']);
+    Route::get('management/training-plans', [\App\Http\Controllers\TrainingPlanController::class, 'index']);
+    Route::post('management/training-plans', [\App\Http\Controllers\TrainingPlanController::class, 'store']);
+    Route::put('management/training-plans/{plan}', [\App\Http\Controllers\TrainingPlanController::class, 'update']);
+    Route::get('management/training-plans/{plan}/trainees/{trainee}', [\App\Http\Controllers\TrainingPlanController::class, 'allowance']);
+    Route::get('my-training-plan', [\App\Http\Controllers\TrainingPlanController::class, 'mine']);
     Route::patch('trainees/{trainee}/review', [\App\Http\Controllers\TraineeController::class, 'review']);
     Route::get('my-records', [\App\Http\Controllers\PersonalWorkspaceController::class, 'records'])->name('personal.records');
     Route::get('my-requests', [\App\Http\Controllers\PersonalWorkspaceController::class, 'requests'])->name('personal.requests');
@@ -80,6 +96,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('my-attendance/verify', [\App\Http\Controllers\PersonalAttendanceController::class, 'verify'])->middleware('throttle:attendance-verify');
     Route::post('my-attendance/break', [\App\Http\Controllers\PersonalAttendanceController::class, 'breakPunch'])->middleware('throttle:attendance-break');
     Route::get('my-team', TeamLeaderWorkspaceController::class)->name('my-team');
+    Route::post('my-team/agents', [TeamLeaderWorkspaceController::class, 'assign']);
+    Route::put('my-team/schedule', [TeamLeaderWorkspaceController::class, 'schedule']);
     Route::get('leave-requests', [EmployeeLeaveController::class, 'index'])->name('leave-requests');
     Route::post('leave-requests', [EmployeeLeaveController::class, 'store'])->middleware('throttle:20,1');
     Route::patch('leave-requests/{leave}/initial-review', [EmployeeLeaveController::class, 'review']);
