@@ -27,6 +27,7 @@ class AttendanceRecord extends Model
     protected function casts(): array
     {
         return [
+            'manual_hours' => 'array',
             'approval_snapshot' => 'array',
             'worked_minutes' => 'integer',
             'leave_minutes' => 'integer',

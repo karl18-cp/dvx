@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import ApplicantExam from '@/components/applicant-exam';
-import type {ExamConfig} from '@/components/applicant-exam';
+import type { ExamConfig } from '@/components/applicant-exam';
 import BusinessInquiryDialog from '@/components/business-inquiry-dialog';
 import { PublicFormFields } from '@/components/public-form-fields';
 import type { PublicFormDefinition } from '@/components/public-form-fields';

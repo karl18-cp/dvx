@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -18,7 +19,7 @@ class AttendanceController extends Controller
     public function index(Request $request, AttendanceScheduleService $schedules): Response
     {
         $actor = $request->user()->fresh();
-        abort_unless($actor->status === 'active' && in_array($actor->role, ['admin', 'team_leader'], true), 403);
+        abort_unless($actor->status === 'active' && in_array($actor->role, ['admin', 'accounting', 'team_leader'], true), 403);
         $teamLeader = $actor->role === 'team_leader';
         $ownRecords = $teamLeader && $request->input('scope') === 'mine';
         $visibleIds = $teamLeader ? ($ownRecords ? [$actor->id] : app(TeamLeaderWorkspaceService::class)->members($actor)->pluck('users.id')->push($actor->id)->unique()->all()) : null;
@@ -49,7 +50,8 @@ class AttendanceController extends Controller
 
                 return [
                     'id' => $user->id,
-                    'canEdit' => $actor->role === 'admin' || (in_array($user->role, ['agent', 'trainee'], true) && $user->id !== $actor->id),
+                    'manualHours' => $record->manual_hours,
+                    'canEdit' => in_array($actor->role, ['admin', 'accounting'], true) || (in_array($user->role, ['agent', 'trainee'], true) && $user->id !== $actor->id),
                     'employeeId' => $user->username,
                     'name' => $user->name,
                     'avatar' => $user->avatar,
@@ -81,7 +83,7 @@ class AttendanceController extends Controller
     public function overrideTime(Request $request, User $employee, AttendanceScheduleService $schedules): RedirectResponse
     {
         $actor = $request->user()->fresh();
-        abort_unless($actor->status === 'active' && ($actor->role === 'admin' || ($actor->role === 'team_leader' && app(TeamLeaderWorkspaceService::class)->members($actor)->whereKey($employee->id)->exists())), 403);
+        abort_unless($actor->status === 'active' && (in_array($actor->role, ['admin', 'accounting'], true) || ($actor->role === 'team_leader' && app(TeamLeaderWorkspaceService::class)->members($actor)->whereKey($employee->id)->exists())), 403);
 
         $data = $request->validate([
             'attendance_date' => ['required', 'date_format:Y-m-d'],
@@ -93,6 +95,11 @@ class AttendanceController extends Controller
         DB::transaction(function () use ($employee, $data, $schedules, $actor): void {
             User::whereKey($employee->id)->lockForUpdate()->firstOrFail();
             $before = AttendanceRecord::where('user_id', $employee->id)->whereDate('attendance_date', $data['attendance_date'])->first()?->toArray();
+            $existing = AttendanceRecord::where('user_id', $employee->id)->whereDate('attendance_date', $data['attendance_date'])->first();
+            if ($existing) {
+                $existing->manual_hours = null;
+                $existing->save();
+            }
             $schedules->record($employee, $data['attendance_date'], $data['field'], $data['time'], $data['time_date'] ?? null);
             $after = AttendanceRecord::where('user_id', $employee->id)->whereDate('attendance_date', $data['attendance_date'])->first()?->toArray();
             DB::table('assessment_activity_logs')->insert([
@@ -103,6 +110,44 @@ class AttendanceController extends Controller
 
         return to_route('attendance', ['date' => $data['attendance_date']])
             ->with('status', 'Attendance time updated successfully.');
+    }
+
+    public function overrideHours(Request $request, User $employee, AttendanceScheduleService $schedules): RedirectResponse
+    {
+        $actor = $request->user()->fresh();
+        abort_unless($actor->status === 'active' && (in_array($actor->role, ['admin', 'accounting'], true) || ($actor->role === 'team_leader' && app(TeamLeaderWorkspaceService::class)->members($actor)->whereKey($employee->id)->exists())), 403);
+        $data = $request->validate([
+            'attendance_date' => ['required', 'date_format:Y-m-d'], 'clear' => ['required', 'boolean'],
+            'total_hours' => ['required_if:clear,false', 'nullable', 'numeric', 'between:0,24'],
+            'overtime_hours' => ['required_if:clear,false', 'nullable', 'numeric', 'between:0,24'],
+            'night_hours' => ['required_if:clear,false', 'nullable', 'numeric', 'between:0,24'],
+            'reason' => ['required', 'string', 'min:5', 'max:1000'],
+        ]);
+        DB::transaction(function () use ($employee, $data, $schedules, $actor): void {
+            $employee = User::whereKey($employee->id)->lockForUpdate()->firstOrFail();
+            $record = AttendanceRecord::where('user_id', $employee->id)->whereDate('attendance_date', $data['attendance_date'])->first();
+            $before = $record?->toArray();
+            $record = $schedules->calculate($employee, $data['attendance_date'], $record);
+            if ($data['clear']) {
+                $record->manual_hours = null;
+            } else {
+                $total = (int) round((float) $data['total_hours'] * 60);
+                $ot = (int) round((float) $data['overtime_hours'] * 60);
+                $night = (int) round((float) $data['night_hours'] * 60);
+                if ($ot > $total || $night > $total) {
+                    throw ValidationException::withMessages(['total_hours' => 'Overtime and night hours are portions of total hours and cannot exceed it.']);
+                }
+                if ($record->approval_snapshot['leave'] && ($ot || $night || (! $record->approval_snapshot['leave']['paid'] && $total))) {
+                    throw ValidationException::withMessages(['total_hours' => 'Leave cannot have worked overtime or night hours; unpaid leave has zero credited hours.']);
+                }
+                $record->manual_hours = ['total_minutes' => $total, 'overtime_minutes' => $ot, 'night_minutes' => $night, 'reason' => $data['reason'], 'actor_id' => $actor->id, 'updated_at' => now()->toISOString()];
+            }
+            $schedules->calculate($employee, $data['attendance_date'], $record)->save();
+            DB::table('assessment_activity_logs')->insert(['actor_id' => $actor->id, 'action' => $data['clear'] ? 'Attendance manual hours removed' : 'Attendance manual hours corrected', 'target_type' => User::class, 'target_id' => $employee->id,
+                'metadata' => json_encode(['date' => $data['attendance_date'], 'reason' => $data['reason'], 'before' => $before, 'after' => $record->toArray()], JSON_THROW_ON_ERROR), 'created_at' => now()]);
+        });
+
+        return to_route('attendance', ['date' => $data['attendance_date']])->with('status', 'Attendance hours updated. Payroll will use the corrected attendance.');
     }
 
     private function positionLabel(string $role): string

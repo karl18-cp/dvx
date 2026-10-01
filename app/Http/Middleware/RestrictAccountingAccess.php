@@ -16,7 +16,9 @@ class RestrictAccountingAccess
         if ($request->is('dashboard')) {
             return redirect('/accounting');
         }
-        abort_unless($request->is('/', 'logout', 'accounting', 'accounting/*', 'settings', 'settings/*', 'user/*', 'users/*/photo', 'notification-feed', 'notification-feed/*'), 403);
+        $attendanceAccess = $request->isMethod('GET') && $request->is('attendance')
+            || $request->isMethod('PUT') && $request->routeIs('attendance.override-time', 'attendance.override-hours');
+        abort_unless($attendanceAccess || $request->is('/', 'logout', 'my-payslips', 'my-payslips/*', 'accounting', 'accounting/*', 'settings', 'settings/*', 'user/*', 'users/*/photo', 'notification-feed', 'notification-feed/*'), 403);
 
         return $next($request);
     }

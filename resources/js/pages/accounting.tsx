@@ -13,13 +13,25 @@ import {
     Tabs,
     TextField,
 } from '@mui/material';
-import { BadgeDollarSign, Plus, Search, X } from 'lucide-react';
+import { BadgeDollarSign, Mail, Plus, Search, X } from 'lucide-react';
 import { useState } from 'react';
 import AccountingDocuments from '@/components/accounting-documents';
 import AccountingExpenses from '@/components/accounting-expenses';
 import EmployeeBankInformation from '@/components/employee-bank-information';
+import EmployeeContracts from '@/components/employee-contracts';
+import EmployeeBackpays from '@/components/employee-backpays';
+import ThirteenthMonthPay from '@/components/thirteenth-month-pay';
+import PayrollCalculation, {
+    payrollDefaults,
+    PayrollBreakdown,
+} from '@/components/payroll-calculation';
+import type { PayrollSnapshot } from '@/components/payroll-calculation';
 import { money } from '@/components/training-allowance-details';
 import type { Allowance } from '@/components/training-allowance-details';
+import {
+    accountingSections,
+    accountingSectionUrl,
+} from '@/lib/accounting-sections';
 
 type Entry = {
     id: number;
@@ -32,7 +44,7 @@ type Entry = {
     net_cents: number;
     status: string;
     paid_at: string | null;
-    employee: { id: number; name: string; username: string };
+    employee: { id: number; name: string; username: string; email?: string };
     notes?: string;
     payment_method?: string;
     payment_reference?: string;
@@ -45,6 +57,7 @@ type Entry = {
         employee_id: string;
         plan_name?: string;
         basis?: string;
+        payroll?: PayrollSnapshot;
         rows?: Allowance['rows'];
     };
 };
@@ -66,6 +79,7 @@ type Preview = Allowance & {
     cutoff: string;
 };
 type Props = {
+    section: string | null;
     entries: {
         data: Entry[];
         current_page: number;
@@ -75,6 +89,13 @@ type Props = {
     };
     summary: Record<'draft' | 'approved' | 'paid', number>;
     employees: { id: number; name: string; username: string; status: string }[];
+    contractEmployees: {
+        id: number;
+        name: string;
+        username: string;
+        role: string;
+        status: string;
+    }[];
     enrollments: Enrollment[];
     filters: { status?: string; kind?: string; search?: string };
     statusMessage?: string;
@@ -89,23 +110,30 @@ const today = () =>
     }).format(new Date());
 
 export default function Accounting({
+    section,
     entries,
     summary,
     employees,
+    contractEmployees,
     enrollments,
     filters,
     statusMessage,
 }: Props) {
-    const [tab, setTab] = useState(0);
+    const [adminTab, setTab] = useState(0);
+    const tab = section
+        ? Math.max(
+              0,
+              accountingSections.findIndex((item) => item.slug === section),
+          )
+        : adminTab;
+    const currentSection = section ? accountingSections[tab] : null;
     const [payrollOpen, setPayrollOpen] = useState(false);
+    const [attendanceReady, setAttendanceReady] = useState(false);
     const payroll = useForm({
         request_key: '',
         user_id: '',
         description: 'Payroll',
-        period_start: '',
-        period_end: '',
-        gross: '',
-        deduction: '0',
+        ...payrollDefaults,
         notes: '',
     });
     const search = useForm({
@@ -124,6 +152,7 @@ export default function Accounting({
         payment_reference: '',
         void_reason: '',
     });
+    const emailPayslip = useForm({});
     const [enrollment, setEnrollment] = useState('');
     const [cutoff, setCutoff] = useState(today());
     const [preview, setPreview] = useState<Preview | null>(null);
@@ -137,7 +166,12 @@ export default function Accounting({
             <IconButton
                 aria-label="Close modal"
                 onClick={close}
-                disabled={update.processing || payroll.processing || preparing}
+                disabled={
+                    update.processing ||
+                    payroll.processing ||
+                    emailPayslip.processing ||
+                    preparing
+                }
             >
                 <X />
             </IconButton>
@@ -148,6 +182,7 @@ export default function Accounting({
         setError('');
         setAction('');
         update.clearErrors();
+        emailPayslip.clearErrors();
 
         try {
             const response = await fetch(`/accounting/entries/${id}`, {
@@ -238,25 +273,40 @@ export default function Accounting({
                     </p>
                     <h1 className="mt-2 flex items-center gap-3 text-3xl font-bold">
                         <BadgeDollarSign className="text-red-700" />
-                        Accounting
+                        {currentSection?.title || 'Accounting'}
                     </h1>
                     <p className="mt-2 text-slate-500">
-                        Review payroll, prepare training allowances, and keep
-                        payment records.
+                        {currentSection?.description ||
+                            'Review payroll, prepare training allowances, and keep payment records.'}
                     </p>
                 </div>
-                <Button
-                    variant="contained"
-                    startIcon={<Plus size={18} />}
-                    onClick={() => {
-                        payroll.reset();
-                        payroll.clearErrors();
-                        payroll.setData('request_key', crypto.randomUUID());
-                        setPayrollOpen(true);
-                    }}
-                >
-                    New payroll entry
-                </Button>
+                {(!section || tab === 0) && (
+                    <Button
+                        variant="contained"
+                        startIcon={<Plus size={18} />}
+                        onClick={() => {
+                            payroll.reset();
+                            payroll.setData('pay_month', today().slice(0, 7));
+                            payroll.clearErrors();
+                            payroll.setData('request_key', crypto.randomUUID());
+                            setPayrollOpen(true);
+                        }}
+                    >
+                        New payroll entry
+                    </Button>
+                )}
+                {section && tab === 1 && (
+                    <Button
+                        onClick={() =>
+                            router.visit(
+                                accountingSectionUrl('payment-register'),
+                            )
+                        }
+                        variant="outlined"
+                    >
+                        View payment register
+                    </Button>
+                )}
             </header>
             {statusMessage && <Alert severity="success">{statusMessage}</Alert>}
             {error && (
@@ -264,55 +314,68 @@ export default function Accounting({
                     {error}
                 </Alert>
             )}
-            <div className="grid gap-4 sm:grid-cols-3">
-                {(
-                    [
-                        ['draft', 'Drafts awaiting review'],
-                        ['approved', 'Approved, awaiting payment'],
-                        ['paid', 'Payments recorded · all time'],
-                    ] as const
-                ).map(([key, label]) => (
-                    <div
-                        key={key}
-                        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-                    >
-                        <p className="text-sm text-slate-500">{label}</p>
-                        <p className="mt-2 text-2xl font-bold">
-                            {money(summary[key])}
-                        </p>
-                    </div>
-                ))}
-            </div>
+            {(!section || tab === 0) && (
+                <div className="grid gap-4 sm:grid-cols-3">
+                    {(
+                        [
+                            ['draft', 'Drafts awaiting review'],
+                            ['approved', 'Approved, awaiting payment'],
+                            ['paid', 'Payments recorded · all time'],
+                        ] as const
+                    ).map(([key, label]) => (
+                        <div
+                            key={key}
+                            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                        >
+                            <p className="text-sm text-slate-500">{label}</p>
+                            <p className="mt-2 text-2xl font-bold">
+                                {money(summary[key])}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+            )}
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                <Tabs
-                    variant="scrollable"
-                    scrollButtons="auto"
-                    value={tab}
-                    onChange={(_, value: number) => {
-                        setTab(value);
-                        setError('');
-                    }}
-                >
-                    <Tab label="Payment register" />
-                    <Tab label="Training allowances" />
-                    <Tab label="Expenses" />
-                    <Tab label="Bank information" />
-                    <Tab label="Invoices" />
-                    <Tab label="Receivables" />
-                    <Tab label="Payables" />
-                </Tabs>
+                {!section && (
+                    <Tabs
+                        variant="scrollable"
+                        scrollButtons="auto"
+                        value={tab}
+                        onChange={(_, value: number) => {
+                            setTab(value);
+                            setError('');
+                        }}
+                    >
+                        <Tab label="Payment register" />
+                        <Tab label="Training allowances" />
+                        <Tab label="Expenses" />
+                        <Tab label="Bank information" />
+                        <Tab label="Employee contracts" />
+                        <Tab label="Invoices" />
+                        <Tab label="Receivables" />
+                        <Tab label="Payables" />
+                        <Tab label="Backpay" />
+                        <Tab label="13th month pay" />
+                    </Tabs>
+                )}
                 <div className="p-5">
-                    {tab >= 4 ? (
+                    {tab === 9 ? (
+                        <ThirteenthMonthPay />
+                    ) : tab === 8 ? (
+                        <EmployeeBackpays />
+                    ) : tab >= 5 && tab <= 7 ? (
                         <AccountingDocuments
                             key={tab}
                             view={
-                                tab === 4
+                                tab === 5
                                     ? 'invoices'
-                                    : tab === 5
+                                    : tab === 6
                                       ? 'receivable'
                                       : 'payable'
                             }
                         />
+                    ) : tab === 4 ? (
+                        <EmployeeContracts employees={contractEmployees} />
                     ) : tab === 3 ? (
                         <EmployeeBankInformation />
                     ) : tab === 2 ? (
@@ -323,10 +386,17 @@ export default function Accounting({
                                 className="mb-5 grid gap-3 md:grid-cols-[1fr_180px_200px_auto]"
                                 onSubmit={(e) => {
                                     e.preventDefault();
-                                    search.get('/accounting', {
-                                        preserveState: true,
-                                        preserveScroll: true,
-                                    });
+                                    search.get(
+                                        section
+                                            ? accountingSectionUrl(
+                                                  'payment-register',
+                                              )
+                                            : '/accounting',
+                                        {
+                                            preserveState: true,
+                                            preserveScroll: true,
+                                        },
+                                    );
                                 }}
                             >
                                 <TextField
@@ -661,15 +731,15 @@ export default function Accounting({
                 open={payrollOpen}
                 onClose={() => !payroll.processing && setPayrollOpen(false)}
                 fullWidth
-                maxWidth="sm"
+                maxWidth="md"
             >
                 {title('New payroll entry', () => setPayrollOpen(false))}
                 <DialogContent dividers>
                     <div className="grid gap-5 py-2">
                         <Alert severity="info">
-                            Enter reviewed earnings and deductions for this
-                            payroll period. Net pay is calculated from the
-                            amounts you enter.
+                            Salary follows the payslip workbook formulas. Review
+                            the hours, rates and month-end deductions before
+                            saving a draft.
                         </Alert>
                         {Object.values(payroll.errors).map((message, i) => (
                             <Alert key={i} severity="error">
@@ -703,46 +773,23 @@ export default function Accounting({
                                 payroll.setData('description', e.target.value)
                             }
                         />
-                        <div className="grid gap-5 sm:grid-cols-2">
-                            {(['period_start', 'period_end'] as const).map(
-                                (key, i) => (
-                                    <TextField
-                                        key={key}
-                                        fullWidth
-                                        type="date"
-                                        label={
-                                            i === 0
-                                                ? 'Period start'
-                                                : 'Period end'
-                                        }
-                                        value={payroll.data[key]}
-                                        onChange={(e) =>
-                                            payroll.setData(key, e.target.value)
-                                        }
-                                        slotProps={{
-                                            inputLabel: { shrink: true },
-                                        }}
-                                    />
-                                ),
-                            )}
-                            {(['gross', 'deduction'] as const).map((key, i) => (
-                                <TextField
-                                    key={key}
-                                    label={
-                                        i === 0
-                                            ? 'Gross earnings (PHP)'
-                                            : 'Deductions (PHP)'
-                                    }
-                                    value={payroll.data[key]}
-                                    onChange={(e) =>
-                                        payroll.setData(key, e.target.value)
-                                    }
-                                    slotProps={{
-                                        htmlInput: { inputMode: 'decimal' },
-                                    }}
-                                />
-                            ))}
-                        </div>
+                        <PayrollCalculation
+                            key={[
+                                payroll.data.user_id,
+                                payroll.data.pay_month,
+                                payroll.data.payout,
+                                payroll.data.regular_holidays,
+                                payroll.data.special_holidays,
+                            ].join('|')}
+                            data={payroll.data}
+                            onReady={setAttendanceReady}
+                            onChange={(next) =>
+                                payroll.setData((current) => ({
+                                    ...current,
+                                    ...next,
+                                }))
+                            }
+                        />
                         <TextField
                             multiline
                             minRows={3}
@@ -757,7 +804,7 @@ export default function Accounting({
                 <DialogActions sx={{ p: 3 }}>
                     <Button
                         variant="contained"
-                        disabled={payroll.processing}
+                        disabled={payroll.processing || !attendanceReady}
                         onClick={() =>
                             payroll.post('/accounting/payroll', {
                                 preserveScroll: true,
@@ -828,6 +875,11 @@ export default function Accounting({
                                     {detail.notes}
                                 </p>
                             )}
+                            {detail.source_snapshot?.payroll && (
+                                <PayrollBreakdown
+                                    data={detail.source_snapshot.payroll}
+                                />
+                            )}
                             {detail.source_snapshot?.rows && (
                                 <div className="max-h-64 overflow-auto rounded-xl border border-slate-200">
                                     <table className="w-full text-left text-sm">
@@ -883,6 +935,13 @@ export default function Accounting({
                                     {message}
                                 </Alert>
                             ))}
+                            {Object.values(emailPayslip.errors).map(
+                                (message, i) => (
+                                    <Alert key={`email-${i}`} severity="error">
+                                        {String(message)}
+                                    </Alert>
+                                ),
+                            )}
                             {action === 'approve' && (
                                 <Alert severity="info">
                                     Confirm that you have reviewed the
@@ -969,6 +1028,24 @@ export default function Accounting({
                 <DialogActions sx={{ p: 3, gap: 1, flexWrap: 'wrap' }}>
                     {detail && !action && (
                         <>
+                            {detail.kind === 'payroll' &&
+                                detail.status === 'paid' && (
+                                    <Button
+                                        variant="contained"
+                                        startIcon={<Mail size={18} />}
+                                        disabled={emailPayslip.processing}
+                                        onClick={() =>
+                                            emailPayslip.post(
+                                                `/accounting/entries/${detail.id}/email-payslip`,
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        {emailPayslip.processing
+                                            ? 'Sending PDF…'
+                                            : 'Email PDF payslip'}
+                                    </Button>
+                                )}
                             {detail.status === 'draft' && (
                                 <Button
                                     variant="contained"

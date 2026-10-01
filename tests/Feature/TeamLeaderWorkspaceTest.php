@@ -114,8 +114,8 @@ class TeamLeaderWorkspaceTest extends TestCase
         $this->actingAs($agent)->get('/my-team')->assertForbidden();
         $this->get('/leave-requests?scope=team')->assertForbidden();
         $leader->update(['status' => 'inactive']);
-        $this->actingAs($leader)->get('/my-team')->assertForbidden();
-        $this->get('/leave-requests')->assertForbidden();
+        $this->actingAs($leader)->get('/my-team')->assertRedirect('/login');
+        $this->get('/leave-requests')->assertRedirect('/login');
     }
 
     public function test_duplicate_retries_overlap_and_invalid_dates(): void

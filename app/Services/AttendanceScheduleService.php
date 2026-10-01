@@ -151,7 +151,7 @@ class AttendanceScheduleService
             $record->leave_minutes = $approved['leave']['paid'] && $start && $end ? $this->netMinutes($start, $end, $breakStart, $breakEnd) : 0;
             $record->total_minutes = $record->leave_minutes;
 
-            return $record;
+            return $this->applyManualHours($record);
         }
         $record->status = $record->time_in ? ($start && $record->time_in->gt($start) ? 'late' : 'present') : ($schedule['rest_day'] ? 'rest_day' : 'not_recorded');
         // Deduct the scheduled break even if punches are missing; longer actual breaks also reduce hours.
@@ -160,6 +160,29 @@ class AttendanceScheduleService
         $record->worked_minutes = $record->time_in && $record->time_out && (bool) $breakStart === (bool) $breakEnd
             ? $this->netMinutes($record->time_in, $record->time_out, $breakStart, $breakEnd) : null;
         $record->total_minutes = $record->worked_minutes;
+
+        return $this->applyManualHours($record);
+    }
+
+    private function applyManualHours(AttendanceRecord $record): AttendanceRecord
+    {
+        if (! $record->manual_hours) {
+            return $record;
+        }
+        $total = $record->manual_hours['total_minutes'];
+        if ($record->status === 'on_leave') {
+            // Unpaid leave remains unpaid, even if an older correction exists.
+            $record->worked_minutes = 0;
+            $record->leave_minutes = ($record->approval_snapshot['leave']['paid'] ?? false) ? $total : 0;
+            $record->total_minutes = $record->leave_minutes;
+        } else {
+            $record->worked_minutes = $total;
+            $record->leave_minutes = 0;
+            $record->total_minutes = $total;
+            if ($total > 0 && in_array($record->status, ['not_recorded', 'rest_day'])) {
+                $record->status = 'present';
+            }
+        }
 
         return $record;
     }

@@ -1,10 +1,24 @@
 # Accounting portal
 
-Admins can open **Accounting** from the sidebar. Set an employee's position to **Accounting** in employee management to grant the dedicated portal. Accounting accounts land here after login and can also access their own settings and notifications; other operational modules are blocked server-side. Agents, team leaders, trainees, managers and QA admins cannot access accounting data.
+Admins can open **Accounting** from the sidebar. Set an employee's position to **Accounting** in employee management to grant the dedicated portal. Accounting accounts land here after login and can also access Attendance, their own settings and notifications; other operational modules are blocked server-side. Agents, team leaders, trainees, managers and QA admins cannot access accounting data.
+
+Accounting users navigate separate sidebar pages for Payment register, Training allowances, Expenses, Bank information, Invoices, Receivables and Payables. Each page has its own URL and supports direct loading, refresh and browser history. Admins retain all seven sections as tabs within their Accounting page. The underlying records and permissions are shared by both layouts.
 
 ## Payroll
 
-Create a draft for an employee, pay period, reviewed gross earnings and deductions in PHP. Explain deductions in the notes. Net pay uses integer centavos, and overlapping non-void payroll periods for the same employee are rejected. Salary, tax and overtime formulas are not inferred from attendance: earnings and deductions must be calculated and reviewed before entry.
+### Attendance corrections
+
+Admins and Accounting can edit all employees' attendance. Team leaders can edit agents and trainees belonging to their assigned teams, including multiple teams, but cannot correct their own attendance or other leaders. These permissions are enforced on both correction endpoints. Accounting has a dedicated Attendance sidebar link.
+
+Correct individual time-in, break and time-out entries, or use **Edit hours** in the Total Hours column. A manual daily total is net of unpaid breaks; optional overtime and night portions cannot exceed the total. The overtime portion is subtracted from basic hours before applying the overtime rate. Hours are rounded to the nearest minute. A reason is required; actor, reason, and before/after values are audited. Paid-leave totals remain leave credit, and unpaid leave cannot receive positive credit through this correction. Manual totals override calculated attendance until removed. Restoring calculated hours returns to time entries and approved requests; saving an individual time correction also clears the daily manual override. Payroll uses the corrected values and its existing stale-draft checks still apply. Recorded payments are not retroactively changed.
+
+New payroll drafts follow the supplied payslip workbook. Select the payout month and either the 15th payout (previous month's 26th through this month's 10th) or month-end payout (11th through 25th). Month-end payday is the final calendar day, including February. Scheduled payday is saved separately from the actual payment date.
+
+Accounting enters regular and basic hourly rates and fixed allowances. Hours are read-only and come from the employee's credited attendance within the cutoff, grouped by the attendance shift date (including overnight shifts ending after the cutoff). The same attendance calculation applies saved schedules, approved requests, lateness, undertime and unpaid breaks. Approved paid leave adds scheduled net hours; unpaid leave and incomplete punches add no hours. Incomplete punches produce a warning. Approved worked overtime is separated from basic and variable allowance hours to avoid paying it twice. Night differential covers worked time from 10 PM to 6 AM, excluding breaks and leave. Accounting selects regular and special non-working holiday shift dates; premium hours come from worked attendance on those dates. Rest/special-day hours share one premium and are not duplicated.
+
+Variable allowance rate is regular rate minus basic rate minus 10% of basic rate. Other component rates are respectively basic × 10%, × 125%, × 30%, and × 100%, matching the workbook. Rates retain fractional centavos, and exact attendance minutes are used until each earnings line is rounded to centavos. These are the supplied workbook rules; the system does not infer additional statutory, holiday, or tax rules.
+
+SSS, PhilHealth, Pag-IBIG and other deductions are entered by accounting for the month-end payout only. Other deductions require an explanation. The 15th payout has zero deductions, enforced server-side. Saved drafts retain the rates, attendance source, hours, earnings, deductions and scheduled payday. Client-supplied hours and totals are ignored. New manual payroll submissions are rejected. Before approval or payment, attendance is recalculated and compared with the snapshot; changed records require voiding the unpaid draft and preparing it again. Earlier unpaid manual-hour drafts must also be recreated, while paid history remains unchanged. Net pay must be positive; overlapping non-void payroll periods remain rejected.
 
 Review the draft, approve it, then record an actual payment's date, method and reference. Recording a payment does not transfer money. Unpaid drafts or approvals can be voided with a reason and replaced; recorded payments are read-only. Approval is a separate action but does not require a different staff member.
 
@@ -17,6 +31,12 @@ Drafts reserve attendance dates; a unique database constraint prevents duplicate
 The register separates draft, approved and paid totals. Audit logs retain actors and entry snapshots. Account deletion is blocked when financial records refer to that account.
 
 Recording payment creates an in-app notification for the recipient and enters the existing employee email-notification workflow. Recipients do not receive access to other employees' accounting records.
+
+## My Payslips
+
+Employee portals, including admin, team leader, accounting and QA admin, have a **My Payslips** sidebar page. Only the signed-in employee's paid payroll entries are listed; drafts, approved-but-unpaid entries, voids and training allowances are excluded. The breakdown opens in a modal with an X close button and shows saved earnings, deductions, net pay, payment details and the attendance used for that payment. Older manual payroll records show their saved totals without inventing an itemized breakdown.
+
+Both list and detail queries enforce the current user's ownership, including for admin/accounting users on this personal page. Other users' entries return 404. Personal responses use private/no-store caching and omit internal payroll notes, approval/audit metadata and manual correction reasons. New payroll payment notifications link to the employee's payslip. Recorded payment snapshots are not recalculated when attendance changes later.
 
 ## Expenses
 

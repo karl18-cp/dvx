@@ -28,7 +28,7 @@ class RestrictQaAdminAccess
             'assessment-reviews', 'assessment-results', 'assessment-results-export', 'assessment-teams',
             'training-library', 'campaign-analytics', 'coaching', 'qa-dashboard', 'call-evaluations', 'qa-scorecards',
         ];
-        $allowed = ['account-statuses', 'account-statuses/*', 'settings', 'settings/*', 'user/*', 'users/*/photo', 'notification-feed', 'notification-feed/*', 'management/employees/*/training-profile'];
+        $allowed = ['my-payslips', 'my-payslips/*', 'account-statuses', 'account-statuses/*', 'settings', 'settings/*', 'user/*', 'users/*/photo', 'notification-feed', 'notification-feed/*', 'management/employees/*/training-profile'];
         foreach ($modules as $module) {
             $allowed[] = 'management/'.$module;
             $allowed[] = 'management/'.$module.'/*';

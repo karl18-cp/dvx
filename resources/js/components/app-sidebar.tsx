@@ -7,6 +7,7 @@ import {
     ClipboardList,
     BookOpenCheck,
     FileText,
+    FileSignature,
     Gavel,
     Inbox,
     Layers3,
@@ -17,6 +18,8 @@ import {
     MessagesSquare,
     Presentation,
     ReceiptText,
+    ScrollText,
+    Calculator,
     Settings,
     Trophy,
     UserCircle,
@@ -39,6 +42,10 @@ import {
     SidebarHeader,
     useSidebar,
 } from '@/components/ui/sidebar';
+import {
+    accountingSections,
+    accountingSectionUrl,
+} from '@/lib/accounting-sections';
 import { dashboard, logout } from '@/routes';
 import type { Auth } from '@/types';
 
@@ -396,7 +403,72 @@ export function AppSidebar() {
 
             <SidebarContent className="bg-[linear-gradient(180deg,#191426_0%,#28131d_62%,#401414_100%)] px-3 py-4 group-data-[collapsible=icon]:px-1">
                 <nav className="space-y-1">
-                    {['admin', 'accounting'].includes(auth.user.role) && (
+                    {auth.user.role !== 'trainee' && (
+                        <SidebarItem
+                            item={{
+                                label: 'My Payslips',
+                                icon: ReceiptText,
+                                href: '/my-payslips',
+                            }}
+                            currentUrl={
+                                (
+                                    page.props.navigation?.currentPath ??
+                                    page.url
+                                ).split('?')[0]
+                            }
+                        />
+                    )}
+                    {isAccounting && (
+                        <SidebarItem
+                            item={{
+                                label: 'Attendance',
+                                icon: CalendarCheck,
+                                href: '/attendance',
+                            }}
+                            currentUrl={
+                                (
+                                    page.props.navigation?.currentPath ??
+                                    page.url
+                                ).split('?')[0]
+                            }
+                        />
+                    )}
+                    {isAccounting &&
+                        accountingSections.map((section, index) => (
+                            <SidebarItem
+                                key={section.slug}
+                                item={{
+                                    label: section.title,
+                                    icon: [
+                                        ReceiptText,
+                                        CalendarDays,
+                                        ClipboardList,
+                                        UserCircle,
+                                        FileSignature,
+                                        FileText,
+                                        Inbox,
+                                        Layers3,
+                                        ScrollText,
+                                        Calculator,
+                                    ][index],
+                                    href: accountingSectionUrl(section.slug),
+                                }}
+                                currentUrl={
+                                    (
+                                        page.props.navigation?.currentPath ??
+                                        page.url
+                                    ).split('?')[0] === '/accounting'
+                                        ? accountingSectionUrl(
+                                              'payment-register',
+                                          )
+                                        : (
+                                              page.props.navigation
+                                                  ?.currentPath ?? page.url
+                                          ).split('?')[0]
+                                }
+                            />
+                        ))}
+                    {auth.user.role === 'admin' && (
                         <SidebarItem
                             item={{
                                 label: 'Accounting',

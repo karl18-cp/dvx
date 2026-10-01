@@ -32,23 +32,25 @@ class AccountingService
             if ($existing = AccountingEntry::where('request_key', $data['request_key'])->first()) {
                 return $existing;
             }
+            $calculation = app(PayrollCalculationService::class)->calculate($data, $employee);
+            $data['period_start'] = $calculation['period_start'];
+            $data['period_end'] = $calculation['period_end'];
             if (AccountingEntry::where('user_id', $employee->id)->where('kind', 'payroll')->where('status', '!=', 'void')->whereDate('period_start', '<=', $data['period_end'])->whereDate('period_end', '>=', $data['period_start'])->exists()) {
                 throw ValidationException::withMessages(['period_start' => 'This employee already has a payroll entry overlapping this period. Review it or void it before replacing it.']);
             }
-            $gross = $this->money($data['gross']);
-            $deduction = $this->money($data['deduction']);
+            $gross = $calculation['gross_cents'];
+            $deduction = $calculation['deduction_cents'];
             if ($gross <= $deduction) {
                 throw ValidationException::withMessages(['deduction' => 'Net pay must be greater than zero.']);
-            }
-            if ($deduction && empty($data['notes'])) {
-                throw ValidationException::withMessages(['notes' => 'Explain the deductions in the payroll notes.']);
             }
             $entry = AccountingEntry::create([
                 'request_key' => $data['request_key'], 'kind' => 'payroll', 'user_id' => $employee->id,
                 'description' => $data['description'], 'period_start' => $data['period_start'], 'period_end' => $data['period_end'],
                 'gross_cents' => $gross, 'deduction_cents' => $deduction, 'net_cents' => $gross - $deduction,
                 'notes' => $data['notes'] ?? null, 'created_by' => $actor->id,
-                'source_snapshot' => ['employee_name' => $employee->name, 'employee_id' => $employee->username, 'basis' => 'Manually entered payroll; reviewed earnings and deductions.'],
+                'source_snapshot' => ['employee_name' => $employee->name, 'employee_id' => $employee->username,
+                    'basis' => 'Workbook formulas; attendance-derived hours and accounting-entered contribution amounts.',
+                    'payroll' => $calculation],
             ]);
             $this->audit($actor, $entry, 'Accounting draft created');
 
@@ -128,6 +130,22 @@ class AccountingService
         }
     }
 
+    private function verifyPayroll(AccountingEntry $entry): void
+    {
+        if ($entry->kind !== 'payroll') {
+            return;
+        }
+        $snapshot = $entry->source_snapshot['payroll'] ?? null;
+        if (($snapshot['version'] ?? 0) !== 2) {
+            throw ValidationException::withMessages(['entry' => 'This payroll uses manually entered hours. Void it and prepare a new attendance-linked draft.']);
+        }
+        $employee = User::whereKey($entry->user_id)->lockForUpdate()->firstOrFail();
+        $current = app(PayrollCalculationService::class)->calculate($snapshot['inputs'], $employee);
+        if ($current['attendance']['fingerprint'] !== $snapshot['attendance']['fingerprint'] || $current['gross_cents'] !== $entry->gross_cents || $current['deduction_cents'] !== $entry->deduction_cents) {
+            throw ValidationException::withMessages(['entry' => 'Attendance or approved requests changed. Void this unpaid draft and prepare it again before approving or recording payment.']);
+        }
+    }
+
     public function transition(User $actor, AccountingEntry $entry, array $data): void
     {
         $this->authorize($actor);
@@ -139,12 +157,14 @@ class AccountingService
                     throw ValidationException::withMessages(['entry' => 'Only a draft can be approved.']);
                 }
                 $this->verifyAllowance($entry);
+                $this->verifyPayroll($entry);
                 $entry->fill(['status' => 'approved', 'approved_by' => $actor->id, 'approved_at' => now()]);
             } elseif ($data['action'] === 'pay') {
                 if ($before !== 'approved') {
                     throw ValidationException::withMessages(['entry' => 'Approve the entry before recording payment.']);
                 }
                 $this->verifyAllowance($entry);
+                $this->verifyPayroll($entry);
                 $entry->fill(['status' => 'paid', 'paid_by' => $actor->id, 'paid_at' => $data['paid_at'], 'payment_method' => $data['payment_method'], 'payment_reference' => $data['payment_reference']]);
             } else {
                 if ($before === 'void') {
@@ -165,6 +185,7 @@ class AccountingService
                     'accounting_payment',
                     'Payment recorded: '.$entry->description,
                     'Accounting recorded PHP '.number_format($entry->net_cents / 100, 2).' for '.$entry->period_start->toDateString().' to '.$entry->period_end->toDateString().'. Payment date: '.$entry->paid_at->toDateString().'. Reference: '.$entry->payment_reference.'.',
+                    $entry->kind === 'payroll' ? '/my-payslips?entry='.$entry->id : null,
                 );
             }
         });

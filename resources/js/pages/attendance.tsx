@@ -25,9 +25,12 @@ import {
 import { useMemo, useState } from 'react';
 import { DateTimeField } from '@/components/date-time-field';
 import EmployeeAvatar from '@/components/employee-avatar';
+import ManualAttendanceHours from '@/components/manual-attendance-hours';
+import type { ManualHours } from '@/components/manual-attendance-hours';
 
 type AttendanceEmployee = {
     canEdit: boolean;
+    manualHours: ManualHours | null;
     id: number;
     employeeId: string;
     avatar: string;
@@ -159,6 +162,8 @@ export default function Attendance({
     employees,
 }: AttendanceProps) {
     const [search, setSearch] = useState('');
+    const [hoursEmployee, setHoursEmployee] =
+        useState<AttendanceEmployee | null>(null);
     const [role, setRole] = useState('all');
     const [status, setStatus] = useState('all');
     const [requestedPage, setPage] = useState(1);
@@ -638,6 +643,25 @@ export default function Attendance({
                                                 })}
                                                 <td className="px-4 py-4 text-sm font-bold text-[#252735]">
                                                     {totalHours(employee)}
+                                                    {employee.manualHours && (
+                                                        <div className="text-xs font-normal text-amber-700">
+                                                            Manual hours
+                                                        </div>
+                                                    )}
+                                                    {canOverride &&
+                                                        employee.canEdit && (
+                                                            <Button
+                                                                size="small"
+                                                                aria-label={`Edit hours for ${employee.name}`}
+                                                                onClick={() =>
+                                                                    setHoursEmployee(
+                                                                        employee,
+                                                                    )
+                                                                }
+                                                            >
+                                                                Edit hours
+                                                            </Button>
+                                                        )}
                                                     {employee.approvals.leave
                                                         ?.paid && (
                                                         <div className="mt-1 text-xs font-normal text-sky-700">
@@ -806,7 +830,7 @@ export default function Attendance({
                             )
                         }
                         slotProps={{ inputLabel: { shrink: true } }}
-                        helperText="Clear the field and save to remove this recorded time."
+                        helperText="Saving a time correction removes any manual total-hours override for this day. Clear the field to remove this recorded time."
                     />
                     {overrideError && (
                         <p role="alert" className="mt-3 text-sm text-red-700">
@@ -831,6 +855,13 @@ export default function Attendance({
                     </Button>
                 </DialogActions>
             </Dialog>
+            {hoursEmployee && (
+                <ManualAttendanceHours
+                    employee={hoursEmployee}
+                    date={attendanceDate}
+                    onClose={() => setHoursEmployee(null)}
+                />
+            )}
         </>
     );
 }
