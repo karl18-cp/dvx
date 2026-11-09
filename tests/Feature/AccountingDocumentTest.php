@@ -63,7 +63,7 @@ class AccountingDocumentTest extends TestCase
         $this->post($url.'/payments', $this->payment(['amount' => '600.15']))->assertSessionHasNoErrors();
         $this->getJson($url)->assertJsonPath('status', 'settled')->assertJsonPath('balance_cents', 0);
         $this->getJson('/accounting/documents?view=receivable&status=settled')->assertJsonPath('records.total', 1)->assertJsonPath('summary.paid_cents', 100025);
-        $this->assertDatabaseHas('assessment_activity_logs', ['action' => 'Document payment recorded', 'target_id' => $id]);
+        $this->assertDatabaseHas('activity_logs', ['action' => 'Document payment recorded', 'target_id' => $id]);
     }
 
     public function test_overdue_and_void_records_and_replacement_invoice(): void

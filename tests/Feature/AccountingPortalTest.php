@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AccountingEntry;
+use App\Models\AttendanceRecord;
 use App\Models\Campaign;
 use App\Models\CampaignSchedule;
 use App\Models\EmployeeBackpay;
@@ -61,7 +62,12 @@ class AccountingPortalTest extends TestCase
         foreach (['admin', 'accounting'] as $role) {
             $this->actingAs($this->actor($role))->get('/accounting')->assertOk();
         }
-        $this->get('/dashboard')->assertRedirect('/accounting');
+        $this->get('/dashboard')->assertRedirect('/accounting/dashboard');
+        $this->get('/accounting/dashboard')->assertOk()->assertInertia(fn ($page) => $page
+            ->component('accounting-dashboard')
+            ->where('metrics.payroll_paid_cents', 0)
+            ->where('metrics.receivable_balance_cents', 0)
+            ->where('priorities.draft_payrolls', 0));
         foreach (['/employees', '/trainees', '/management/qa-dashboard', '/management/training-plans', '/my-team', '/divertext'] as $url) {
             $this->get($url)->assertForbidden();
         }
@@ -69,6 +75,40 @@ class AccountingPortalTest extends TestCase
         foreach (['agent', 'team_leader', 'manager', 'qa_admin', 'trainee'] as $role) {
             $this->actingAs($this->actor($role))->getJson('/accounting')->assertForbidden();
         }
+    }
+
+    public function test_accounting_dashboard_is_role_specific_and_summarizes_finance_work(): void
+    {
+        $accountant = $this->actor();
+        $employee = $this->actor('agent');
+        AccountingEntry::create([
+            'request_key' => (string) Str::uuid(), 'kind' => 'payroll', 'user_id' => $employee->id,
+            'description' => 'October payroll', 'period_start' => '2026-09-26', 'period_end' => '2026-10-10',
+            'gross_cents' => 100000, 'deduction_cents' => 10000, 'net_cents' => 90000,
+            'status' => 'approved', 'created_by' => $accountant->id,
+        ]);
+        $documentId = \DB::table('accounting_documents')->insertGetId([
+            'request_key' => (string) Str::uuid(), 'direction' => 'receivable', 'party_name' => 'Client One',
+            'description' => 'October services', 'issue_date' => '2026-10-01', 'due_date' => '2026-10-05',
+            'amount_cents' => 250000, 'created_by' => $accountant->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        \DB::table('accounting_document_payments')->insert([
+            'document_id' => $documentId, 'request_key' => (string) Str::uuid(), 'amount_cents' => 50000,
+            'payment_date' => '2026-10-03', 'method' => 'bank_transfer', 'reference' => 'OR-001',
+            'created_by' => $accountant->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAs($accountant)->get('/accounting/dashboard')->assertOk()->assertInertia(fn ($page) => $page
+            ->component('accounting-dashboard')
+            ->where('metrics.pending_cents', 90000)
+            ->where('metrics.pending_count', 1)
+            ->where('metrics.receivable_balance_cents', 200000)
+            ->where('monthActivity.receipts_cents', 50000)
+            ->where('priorities.overdue_receivables', 1)
+            ->has('upcoming', 1));
+
+        $this->actingAs($this->actor('admin'))->get('/accounting/dashboard')->assertForbidden();
+        $this->actingAs($this->actor('agent'))->get('/accounting/dashboard')->assertForbidden();
     }
 
     public function test_admin_can_assign_accounting_role(): void
@@ -80,7 +120,7 @@ class AccountingPortalTest extends TestCase
 
     public function test_accounting_sections_have_separate_pages_and_admin_keeps_tabs(): void
     {
-        $sections = ['payment-register', 'training-allowances', 'expenses', 'bank-information', 'contracts', 'invoices', 'receivables', 'payables', 'backpay', '13th-month-pay'];
+        $sections = ['payment-register', 'training-allowances', 'trainee-tracker', 'expenses', 'bank-information', 'contracts', 'invoices', 'receivables', 'payables', 'backpay', '13th-month-pay', 'government-tax-reports'];
         $this->actingAs($this->actor());
         $this->get('/accounting')->assertInertia(fn ($page) => $page->component('accounting')->where('section', 'payment-register'));
         foreach ($sections as $section) {
@@ -123,7 +163,10 @@ class AccountingPortalTest extends TestCase
         $url = '/accounting/entries/'.$entry->id;
         $payment = ['action' => 'pay', 'paid_at' => '2026-10-01', 'payment_method' => 'cash', 'payment_reference' => 'Voucher 001'];
         $this->patch($url, $payment)->assertSessionHasErrors('entry');
+        $this->patch($url, ['action' => 'submit'])->assertSessionHasNoErrors();
         $this->patch($url, ['action' => 'approve'])->assertSessionHasNoErrors();
+        $this->patch($url, $payment)->assertSessionHasErrors('entry');
+        $this->patch($url, ['action' => 'lock'])->assertSessionHasNoErrors();
         $this->patch($url, [...$payment, 'payment_reference' => ''])->assertSessionHasErrors('payment_reference');
         $this->patch($url, $payment)->assertSessionHasNoErrors();
         $this->assertSame('paid', $entry->fresh()->status);
@@ -132,7 +175,34 @@ class AccountingPortalTest extends TestCase
         $this->patch($url, ['action' => 'void', 'void_reason' => 'Changing history'])->assertSessionHasErrors('entry');
         $this->getJson($url)->assertOk()->assertJsonPath('payment_reference', 'Voucher 001');
         $this->actingAs($this->actor('agent'))->getJson($url)->assertForbidden();
-        $this->assertDatabaseHas('assessment_activity_logs', ['target_id' => $entry->id, 'action' => 'Accounting entry paid']);
+        $this->assertDatabaseHas('activity_logs', ['target_id' => $entry->id, 'action' => 'Accounting entry paid']);
+    }
+
+    public function test_locked_payroll_requires_a_documented_correction_record(): void
+    {
+        $this->actingAs($this->actor())->post('/accounting/payroll', $this->payroll($this->actor('agent')));
+        $entry = AccountingEntry::sole();
+        $url = '/accounting/entries/'.$entry->id;
+        $this->patch($url, ['action' => 'submit'])->assertSessionHasNoErrors();
+        $this->patch($url, ['action' => 'approve'])->assertSessionHasNoErrors();
+        $this->patch($url, ['action' => 'lock'])->assertSessionHasNoErrors();
+        $this->patch($url, ['action' => 'void', 'void_reason' => 'Trying to change locked payroll'])->assertSessionHasErrors('entry');
+
+        $this->post($url.'/corrections', [
+            'request_key' => (string) Str::uuid(),
+            'correction_type' => 'adjustment',
+            'correction_direction' => 'credit',
+            'amount' => '125.50',
+            'description' => 'Attendance correction',
+            'reason' => 'Approved attendance correction after payroll lock.',
+        ])->assertSessionHasNoErrors();
+
+        $correction = AccountingEntry::where('kind', 'payroll_adjustment')->sole();
+        $this->assertSame($entry->id, $correction->parent_entry_id);
+        $this->assertSame(12550, $correction->net_cents);
+        $this->assertSame('draft', $correction->status);
+        $this->assertSame('locked', $entry->fresh()->status);
+        $this->assertDatabaseHas('activity_logs', ['target_id' => $correction->id, 'action' => 'Payroll adjustment draft created']);
     }
 
     public function test_thirteenth_month_uses_paid_basic_pay_and_backpay_is_locked_after_claim(): void
@@ -191,6 +261,84 @@ class AccountingPortalTest extends TestCase
         ])->assertSessionHasErrors('backpay');
     }
 
+    public function test_thirteenth_month_adds_daily_attendance_and_tracks_ceo_funding(): void
+    {
+        $this->travelTo(now()->setDate(2026, 10, 20)->setTime(20, 0));
+
+        $accountant = $this->actor();
+        $employee = $this->actor('agent');
+        $employee->update(['username' => 'DVX900']);
+        AccountingEntry::create([
+            'request_key' => (string) Str::uuid(), 'kind' => 'payroll', 'user_id' => $employee->id,
+            'description' => 'October payroll', 'period_start' => '2026-10-01', 'period_end' => '2026-10-10',
+            'gross_cents' => 120000, 'deduction_cents' => 0, 'net_cents' => 120000,
+            'status' => 'paid', 'paid_at' => '2026-10-15', 'created_by' => $accountant->id,
+            'source_snapshot' => ['payroll' => ['basic_rate' => '100.00', 'earnings' => [
+                ['label' => 'Basic pay', 'amount_cents' => 120000, 'minutes' => 720],
+            ]]],
+        ]);
+        AttendanceRecord::forceCreate([
+            'user_id' => $employee->id, 'attendance_date' => '2026-10-11', 'status' => 'present',
+            'worked_minutes' => 480, 'leave_minutes' => 0, 'total_minutes' => 480,
+            'schedule_snapshot' => ['timezone' => 'Asia/Manila', 'rest_day' => false, 'times' => []],
+            'approval_snapshot' => ['leave' => null, 'overtime' => null, 'undertime' => null],
+        ]);
+
+        $this->actingAs($accountant)->getJson('/accounting/thirteenth-month?year=2026')->assertOk()
+            ->assertJsonPath('summary.confirmed_basic_cents', 120000)
+            ->assertJsonPath('summary.pending_basic_cents', 80000)
+            ->assertJsonPath('summary.thirteenth_month_cents', 16667)
+            ->assertJsonPath('records.data.0.pending_attendance_days', 1)
+            ->assertJsonPath('fund.funded_cents', 0);
+
+        $this->post('/accounting/thirteenth-month/contributions', [
+            'request_key' => (string) Str::uuid(), 'contribution_month' => '2026-10',
+            'amount' => '100.00', 'reference' => 'CEO-OCT', 'notes' => 'October allocation',
+        ])->assertSessionHasNoErrors();
+        $response = $this->getJson('/accounting/thirteenth-month?year=2026')->assertOk()
+            ->assertJsonPath('fund.funded_cents', 10000)
+            ->assertJsonPath('fund.balance_cents', 6667)
+            ->assertJsonPath('monthly.9.funded_cents', 10000)
+            ->assertJsonPath('contributions.0.reference', 'CEO-OCT');
+        $contributionId = $response->json('contributions.0.id');
+        $this->patch('/accounting/thirteenth-month/contributions/'.$contributionId.'/void', ['void_reason' => 'Replaced incorrect deposit'])
+            ->assertSessionHasNoErrors();
+        $this->getJson('/accounting/thirteenth-month?year=2026')->assertJsonPath('fund.funded_cents', 0)->assertJsonPath('contributions.0.void_reason', 'Replaced incorrect deposit');
+        $this->assertDatabaseHas('activity_logs', ['action' => '13th-month fund contribution voided']);
+    }
+
+    public function test_trainee_tracker_links_attendance_to_accrued_and_reserved_salary(): void
+    {
+        [$plan, $trainee] = $this->training();
+        $accountant = $this->actor();
+        $this->attend($trainee, '2026-09-28');
+        $this->attend($trainee, '2026-09-29');
+
+        $this->actingAs($accountant)->getJson('/accounting/trainee-tracker')->assertOk()
+            ->assertJsonPath('summary.trainees', 1)
+            ->assertJsonPath('summary.attended_days', 2)
+            ->assertJsonPath('summary.earned_cents', 40050)
+            ->assertJsonPath('summary.available_cents', 40050)
+            ->assertJsonPath('records.data.0.attendance.missed_days', 2)
+            ->assertJsonPath('records.data.0.salary.payout_status', 'Ready for payout');
+
+        $this->getJson('/accounting/trainee-tracker/'.$plan->id.'/'.$trainee->id)->assertOk()
+            ->assertJsonPath('allowance.qualified_days', 2)
+            ->assertJsonPath('allowance.rows.0.worked_minutes', 480);
+
+        $this->post('/accounting/allowances/'.$plan->id.'/'.$trainee->id, [
+            'request_key' => (string) Str::uuid(),
+            'cutoff' => '2026-10-10',
+        ])->assertSessionHasNoErrors();
+
+        $this->getJson('/accounting/trainee-tracker')->assertOk()
+            ->assertJsonPath('summary.reserved_cents', 40050)
+            ->assertJsonPath('summary.available_cents', 0)
+            ->assertJsonPath('records.data.0.salary.payout_status', 'Pending accounting entry');
+
+        $this->actingAs($this->actor('agent'))->getJson('/accounting/trainee-tracker')->assertForbidden();
+    }
+
     public function test_allowance_waits_for_threshold_reserves_first_days_and_only_pays_remaining_days_next(): void
     {
         [$plan,$trainee] = $this->training();
@@ -205,7 +353,9 @@ class AccountingPortalTest extends TestCase
         $this->assertSame(40050, $first->net_cents);
         $this->assertDatabaseCount('accounting_allowance_days', 2);
         $this->post($url, ['request_key' => (string) Str::uuid(), 'cutoff' => '2026-10-10'])->assertSessionHasErrors('allowance');
+        $this->patch('/accounting/entries/'.$first->id, ['action' => 'submit'])->assertSessionHasNoErrors();
         $this->patch('/accounting/entries/'.$first->id, ['action' => 'approve'])->assertSessionHasNoErrors();
+        $this->patch('/accounting/entries/'.$first->id, ['action' => 'lock'])->assertSessionHasNoErrors();
         $this->patch('/accounting/entries/'.$first->id, ['action' => 'pay', 'paid_at' => '2026-10-01', 'payment_method' => 'bank_transfer', 'payment_reference' => 'FIRST'])->assertSessionHasNoErrors();
         $this->post($url, ['request_key' => (string) Str::uuid(), 'cutoff' => '2026-10-10'])->assertSessionHasNoErrors();
         $this->assertSame(30050, AccountingEntry::latest('id')->first()->net_cents);
@@ -224,7 +374,7 @@ class AccountingPortalTest extends TestCase
         $phases = $plan->phases;
         $phases[0]['rate_cents'] = 25000;
         $plan->update(['phases' => $phases]);
-        $this->patch('/accounting/entries/'.$entry->id, ['action' => 'approve'])->assertSessionHasErrors('entry');
+        $this->patch('/accounting/entries/'.$entry->id, ['action' => 'submit'])->assertSessionHasErrors('entry');
         $this->patch('/accounting/entries/'.$entry->id, ['action' => 'void', 'void_reason' => 'Rate changed; rebuild draft'])->assertSessionHasNoErrors();
         $this->assertSame('void', $entry->fresh()->status);
         $this->assertDatabaseCount('accounting_allowance_days', 0);

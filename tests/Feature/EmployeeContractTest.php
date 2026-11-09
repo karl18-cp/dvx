@@ -62,7 +62,7 @@ class EmployeeContractTest extends TestCase
         foreach (EmployeeContract::all() as $contract) {
             Storage::disk('local')->assertExists($contract->file_path);
         }
-        $this->assertDatabaseCount('assessment_activity_logs', 2);
+        $this->assertDatabaseCount('activity_logs', 2);
     }
 
     public function test_contracts_are_private_linked_searchable_and_downloadable(): void
@@ -122,7 +122,7 @@ class EmployeeContractTest extends TestCase
         $this->getJson('/accounting/contracts?status=archived')->assertJsonPath('records.data.0.id', $contract->id);
         $this->post('/accounting/contracts/'.$contract->id.'/update', $this->payload($employee, ['request_key' => '', 'document' => null]))
             ->assertSessionHasErrors('contract');
-        $this->assertDatabaseHas('assessment_activity_logs', ['target_id' => $contract->id, 'action' => 'Employee contract archived']);
+        $this->assertDatabaseHas('activity_logs', ['target_id' => $contract->id, 'action' => 'Employee contract archived']);
     }
 
     public function test_contract_validation_rejects_unsafe_files_and_invalid_dates_and_blocks_account_deletion(): void

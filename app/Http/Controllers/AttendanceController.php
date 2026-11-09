@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\AttendanceRecord;
 use App\Models\User;
 use App\Services\AttendanceScheduleService;
+use App\Services\AuditLogService;
 use App\Services\TeamLeaderWorkspaceService;
+use App\Services\RolePermissionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,8 +21,9 @@ class AttendanceController extends Controller
     public function index(Request $request, AttendanceScheduleService $schedules): Response
     {
         $actor = $request->user()->fresh();
-        abort_unless($actor->status === 'active' && in_array($actor->role, ['admin', 'accounting', 'team_leader'], true), 403);
+        abort_unless(app(RolePermissionService::class)->can($actor, 'attendance.view'), 403);
         $teamLeader = $actor->role === 'team_leader';
+        $canEditAttendance = app(RolePermissionService::class)->can($actor, 'attendance.edit');
         $ownRecords = $teamLeader && $request->input('scope') === 'mine';
         $visibleIds = $teamLeader ? ($ownRecords ? [$actor->id] : app(TeamLeaderWorkspaceService::class)->members($actor)->pluck('users.id')->push($actor->id)->unique()->all()) : null;
 
@@ -43,7 +46,7 @@ class AttendanceController extends Controller
             ->whereNotNull('username')
             ->orderBy('username')
             ->get()
-            ->map(function (User $user) use ($records, $schedules, $date, $actor): array {
+            ->map(function (User $user) use ($records, $schedules, $date, $actor, $canEditAttendance): array {
                 /** @var AttendanceRecord|null $record */
                 $record = $schedules->calculate($user, $date, $records->get($user->id));
                 $schedule = $record->schedule_snapshot;
@@ -51,7 +54,7 @@ class AttendanceController extends Controller
                 return [
                     'id' => $user->id,
                     'manualHours' => $record->manual_hours,
-                    'canEdit' => in_array($actor->role, ['admin', 'accounting'], true) || (in_array($user->role, ['agent', 'trainee'], true) && $user->id !== $actor->id),
+                    'canEdit' => $canEditAttendance && ($actor->role !== 'team_leader' || (in_array($user->role, ['agent', 'trainee'], true) && $user->id !== $actor->id)),
                     'employeeId' => $user->username,
                     'name' => $user->name,
                     'avatar' => $user->avatar,
@@ -72,7 +75,7 @@ class AttendanceController extends Controller
             });
 
         return Inertia::render('attendance', [
-            'canOverride' => true,
+            'canOverride' => $canEditAttendance,
             'isTeamLeader' => $teamLeader,
             'attendanceScope' => $ownRecords ? 'mine' : 'team',
             'attendanceDate' => $date,
@@ -83,7 +86,7 @@ class AttendanceController extends Controller
     public function overrideTime(Request $request, User $employee, AttendanceScheduleService $schedules): RedirectResponse
     {
         $actor = $request->user()->fresh();
-        abort_unless($actor->status === 'active' && (in_array($actor->role, ['admin', 'accounting'], true) || ($actor->role === 'team_leader' && app(TeamLeaderWorkspaceService::class)->members($actor)->whereKey($employee->id)->exists())), 403);
+        abort_unless(app(RolePermissionService::class)->can($actor, 'attendance.edit') && ($actor->role !== 'team_leader' || app(TeamLeaderWorkspaceService::class)->members($actor)->whereKey($employee->id)->exists()), 403);
 
         $data = $request->validate([
             'attendance_date' => ['required', 'date_format:Y-m-d'],
@@ -102,10 +105,7 @@ class AttendanceController extends Controller
             }
             $schedules->record($employee, $data['attendance_date'], $data['field'], $data['time'], $data['time_date'] ?? null);
             $after = AttendanceRecord::where('user_id', $employee->id)->whereDate('attendance_date', $data['attendance_date'])->first()?->toArray();
-            DB::table('assessment_activity_logs')->insert([
-                'actor_id' => $actor->id, 'action' => 'Attendance time corrected', 'target_type' => User::class, 'target_id' => $employee->id,
-                'metadata' => json_encode(['field' => $data['field'], 'date' => $data['attendance_date'], 'before' => $before, 'after' => $after], JSON_THROW_ON_ERROR), 'created_at' => now(),
-            ]);
+            app(AuditLogService::class)->record($actor, 'attendance', 'Attendance time corrected', $employee, metadata: ['field' => $data['field'], 'date' => $data['attendance_date'], 'before' => $before, 'after' => $after], subjectId: $employee->id);
         });
 
         return to_route('attendance', ['date' => $data['attendance_date']])
@@ -115,7 +115,7 @@ class AttendanceController extends Controller
     public function overrideHours(Request $request, User $employee, AttendanceScheduleService $schedules): RedirectResponse
     {
         $actor = $request->user()->fresh();
-        abort_unless($actor->status === 'active' && (in_array($actor->role, ['admin', 'accounting'], true) || ($actor->role === 'team_leader' && app(TeamLeaderWorkspaceService::class)->members($actor)->whereKey($employee->id)->exists())), 403);
+        abort_unless(app(RolePermissionService::class)->can($actor, 'attendance.edit') && ($actor->role !== 'team_leader' || app(TeamLeaderWorkspaceService::class)->members($actor)->whereKey($employee->id)->exists()), 403);
         $data = $request->validate([
             'attendance_date' => ['required', 'date_format:Y-m-d'], 'clear' => ['required', 'boolean'],
             'total_hours' => ['required_if:clear,false', 'nullable', 'numeric', 'between:0,24'],
@@ -143,8 +143,7 @@ class AttendanceController extends Controller
                 $record->manual_hours = ['total_minutes' => $total, 'overtime_minutes' => $ot, 'night_minutes' => $night, 'reason' => $data['reason'], 'actor_id' => $actor->id, 'updated_at' => now()->toISOString()];
             }
             $schedules->calculate($employee, $data['attendance_date'], $record)->save();
-            DB::table('assessment_activity_logs')->insert(['actor_id' => $actor->id, 'action' => $data['clear'] ? 'Attendance manual hours removed' : 'Attendance manual hours corrected', 'target_type' => User::class, 'target_id' => $employee->id,
-                'metadata' => json_encode(['date' => $data['attendance_date'], 'reason' => $data['reason'], 'before' => $before, 'after' => $record->toArray()], JSON_THROW_ON_ERROR), 'created_at' => now()]);
+            app(AuditLogService::class)->record($actor, 'attendance', $data['clear'] ? 'Attendance manual hours removed' : 'Attendance manual hours corrected', $employee, metadata: ['date' => $data['attendance_date'], 'reason' => $data['reason'], 'before' => $before, 'after' => $record->toArray()], subjectId: $employee->id);
         });
 
         return to_route('attendance', ['date' => $data['attendance_date']])->with('status', 'Attendance hours updated. Payroll will use the corrected attendance.');

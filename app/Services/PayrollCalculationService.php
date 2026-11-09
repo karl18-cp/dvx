@@ -31,8 +31,8 @@ class PayrollCalculationService
         }
         $lines[] = ['label' => 'Fixed allowances', 'rate' => null, 'hours' => null, 'amount_cents' => $money->money($data['fixed_allowances'])];
         $deductions = [];
-        foreach (['sss' => 'SSS', 'philhealth' => 'PhilHealth', 'pagibig' => 'Pag-IBIG', 'other_deductions' => 'Other deductions'] as $key => $label) {
-            $amount = $money->money($data[$key]);
+        foreach (['sss' => 'SSS', 'philhealth' => 'PhilHealth', 'pagibig' => 'Pag-IBIG', 'withholding_tax' => 'BIR withholding tax', 'other_deductions' => 'Other deductions'] as $key => $label) {
+            $amount = $money->money($data[$key] ?? '0');
             if (! $monthEnd && $amount > 0) {
                 throw ValidationException::withMessages([$key => 'Deductions apply only to the month-end payout.']);
             }
@@ -44,7 +44,7 @@ class PayrollCalculationService
 
         return ['period_start' => $attendance['period_start'], 'period_end' => $attendance['period_end'], 'pay_date' => $attendance['pay_date'],
             'pay_month' => $data['pay_month'], 'payout' => $data['payout'], 'version' => 2, 'attendance' => $attendance,
-            'inputs' => array_intersect_key($data, array_flip(['pay_month', 'payout', 'regular_rate', 'basic_rate', 'fixed_allowances', 'sss', 'philhealth', 'pagibig', 'other_deductions', 'notes', 'regular_holidays', 'special_holidays'])),
+            'inputs' => array_intersect_key($data, array_flip(['pay_month', 'payout', 'regular_rate', 'basic_rate', 'fixed_allowances', 'sss', 'philhealth', 'pagibig', 'withholding_tax', 'other_deductions', 'notes', 'regular_holidays', 'special_holidays'])),
             'regular_rate' => $data['regular_rate'], 'basic_rate' => $data['basic_rate'],
             'earnings' => $lines, 'deductions' => $deductions,
             'gross_cents' => array_sum(array_column($lines, 'amount_cents')),

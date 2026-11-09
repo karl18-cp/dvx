@@ -23,7 +23,7 @@ class EmployeeRoleService
 
     public function change(User $actor, User $employee, string $role): void
     {
-        abort_unless($actor->role === 'admin', 403);
+        abort_unless(app(RolePermissionService::class)->can($actor, 'employees.manage'), 403);
         if ($actor->is($employee) && $role !== 'admin') {
             throw ValidationException::withMessages(['position' => 'You cannot remove your own administrator role. Ask another administrator to change it.']);
         }

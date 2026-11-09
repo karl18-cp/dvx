@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\LeaveRequest;
 use App\Models\User;
 use App\Services\TeamLeaderWorkspaceService;
+use App\Services\AuditLogService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -79,6 +80,7 @@ class EmployeeLeaveController extends Controller
                 throw ValidationException::withMessages(['decision' => 'This request has already been reviewed. Refresh the list.']);
             }
             $leave->forceFill(['leader_status' => $data['decision'], 'leader_reviewed_by' => $user->id, 'leader_name' => $user->name, 'leader_reviewed_at' => now(), 'leader_notes' => $data['notes'] ?? null, 'status' => $data['decision'] === 'rejected' ? 'rejected' : 'needs_review'])->save();
+            app(AuditLogService::class)->record($user, 'approvals', 'Leave request initial review '.$data['decision'], $leave, metadata: ['decision' => $data['decision'], 'notes' => $data['notes'] ?? null], subjectId: $leave->user_id);
         });
 
         return back()->with('status', $data['decision'] === 'approved' ? 'Initial approval saved. Awaiting final admin approval.' : 'Leave request rejected at initial review.');

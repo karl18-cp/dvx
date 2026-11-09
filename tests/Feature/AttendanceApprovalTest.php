@@ -26,6 +26,11 @@ class AttendanceApprovalTest extends TestCase
         $user = User::factory()->create(['username' => 'APPROVAL001']);
         $user->campaign_schedule_id = $schedule->id;
         $user->save();
+        $user->personalInformation()->create([
+            'email' => $user->email, 'birth_date' => '1995-01-01', 'start_date' => '2024-01-01',
+            'gender' => 'Other', 'civil_status' => 'Single', 'phone' => '09123456789', 'address' => 'Test address',
+            'emergency_contact_name' => 'Contact', 'emergency_contact_relationship' => 'Parent', 'emergency_contact_phone' => '09123456788',
+        ]);
 
         return $user;
     }

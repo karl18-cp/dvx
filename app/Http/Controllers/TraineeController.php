@@ -18,7 +18,7 @@ class TraineeController extends Controller
 {
     public function index(Request $request)
     {
-        abort_unless($request->user()->role === 'admin', 403);
+        abort_unless(app(\App\Services\RolePermissionService::class)->can($request->user(), 'trainees.manage'), 403);
 
         return Inertia::render('trainees', [
             'assignmentTeams' => Team::with(['campaign:id,name', 'leaderAssignment.user:id,name'])->whereHas('leaderAssignment.user', fn ($q) => $q->where('role', 'team_leader')->where('status', 'active'))->orderBy('name')->get()->map(fn ($team) => ['id' => $team->id, 'name' => $team->name, 'campaign_id' => $team->campaign_id, 'leader' => $team->leaderAssignment->user->name]),
@@ -39,7 +39,7 @@ class TraineeController extends Controller
 
     public function review(Request $request, User $trainee, AccountStatusService $service)
     {
-        abort_unless($request->user()->role === 'admin', 403);
+        abort_unless(app(\App\Services\RolePermissionService::class)->can($request->user(), 'trainees.manage'), 403);
         abort_unless($trainee->role === 'trainee', 409, 'This is a legacy employee record. Use Employee Status for this account.');
         $data = $request->validate(['decision' => ['required', Rule::in(['in_training', 'graduated', 'rejected'])], 'notes' => ['required_if:decision,rejected', 'nullable', 'string', 'max:2000']]);
         $service->update($request->user(), $trainee, $data['decision'], $data['notes'] ?? null);
@@ -49,7 +49,7 @@ class TraineeController extends Controller
 
     public function assignTeam(Request $request, User $trainee, TraineeTeamService $service)
     {
-        abort_unless($request->user()->role === 'admin', 403);
+        abort_unless(app(\App\Services\RolePermissionService::class)->can($request->user(), 'trainees.manage'), 403);
         $data = $request->validate(['team_id' => ['required', 'integer', 'exists:teams,id']]);
         $service->assign($request->user(), $trainee, Team::findOrFail($data['team_id']));
 

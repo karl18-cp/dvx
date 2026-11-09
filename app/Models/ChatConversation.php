@@ -4,8 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-#[Fillable(['conversation_key', 'type', 'first_user_id', 'second_user_id', 'team_id'])]
+#[Fillable(['conversation_key', 'type', 'name', 'created_by', 'first_user_id', 'second_user_id', 'team_id'])]
 class ChatConversation extends Model
 {
     public function firstUser()
@@ -21,6 +22,11 @@ class ChatConversation extends Model
     public function team()
     {
         return $this->belongsTo(Team::class);
+    }
+
+    public function members(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'chat_conversation_members', 'conversation_id', 'user_id')->withTimestamps();
     }
 
     public function messages()

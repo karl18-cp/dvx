@@ -12,7 +12,7 @@ class TraineeEmployeeAccountService
 {
     public function create(User $actor, User $trainee): User
     {
-        abort_unless($actor->role === 'admin' && $actor->status === 'active', 403);
+        abort_unless(app(RolePermissionService::class)->can($actor, 'trainees.promote'), 403);
         $photo = null;
         try {
             return DB::transaction(function () use ($actor, $trainee, &$photo): User {

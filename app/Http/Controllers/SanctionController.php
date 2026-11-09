@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\EmployeeSanction;
 use App\Models\Sanction;
+use App\Services\AuditLogService;
+use App\Services\RolePermissionService;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -117,14 +119,11 @@ class SanctionController extends Controller
 
     private function authorizeAdmin(Request $request): void
     {
-        abort_unless($request->user()?->role === 'admin', 403);
+        abort_unless(app(RolePermissionService::class)->can($request->user(), 'sanctions.manage'), 403);
     }
 
     private function log(Request $request, string $action, string $type, int $id, array $metadata): void
     {
-        DB::table('assessment_activity_logs')->insert([
-            'actor_id' => $request->user()->id, 'action' => $action, 'target_type' => $type, 'target_id' => $id,
-            'metadata' => json_encode($metadata), 'created_at' => now(),
-        ]);
+        app(AuditLogService::class)->record($request->user(), 'sanctions', $action, $type, $id, $metadata, $metadata['employee_id'] ?? null);
     }
 }

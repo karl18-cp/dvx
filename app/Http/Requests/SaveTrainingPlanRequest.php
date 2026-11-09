@@ -10,7 +10,7 @@ class SaveTrainingPlanRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->status === 'active' && in_array($this->user()?->role, ['admin', 'qa_admin'], true);
+        return app(\App\Services\RolePermissionService::class)->can($this->user(), 'training.manage');
     }
 
     public function rules(): array

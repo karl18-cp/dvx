@@ -22,7 +22,7 @@ class EmployeeController extends Controller
 {
     public function index(Request $request): Response
     {
-        abort_unless(in_array($request->user()?->role, ['admin', 'manager'], true), 403);
+        abort_unless(app(\App\Services\RolePermissionService::class)->can($request->user(), 'employees.view'), 403);
         $employees = User::query()
             ->with(['personalInformation', 'campaignSchedule:id,name'])
             ->whereNotNull('username')
@@ -58,7 +58,7 @@ class EmployeeController extends Controller
             'createTrainee' => $request->query('create') === 'trainee',
             'nextEmployeeId' => app(EmployeeNumberService::class)->next(),
             'nextTraineeId' => app(EmployeeNumberService::class)->next(trainee: true),
-            'canManageEmployees' => $request->user()?->role === 'admin',
+            'canManageEmployees' => app(\App\Services\RolePermissionService::class)->can($request->user(), 'employees.manage'),
             'statusMessage' => $request->session()->get('status'),
             'employees' => $employees,
             'stats' => [
@@ -170,7 +170,7 @@ class EmployeeController extends Controller
 
     public function updateRole(Request $request, User $employee, EmployeeRoleService $roles): RedirectResponse
     {
-        abort_unless($request->user()?->role === 'admin', 403);
+        abort_unless(app(\App\Services\RolePermissionService::class)->can($request->user(), 'employees.manage'), 403);
         $data = $request->validate(['position' => ['required', Rule::in(array_keys(EmployeeRoleService::ROLES))]]);
         $roles->change($request->user(), $employee, $this->roleValue($data['position']));
 

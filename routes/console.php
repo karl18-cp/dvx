@@ -1,8 +1,12 @@
 <?php
 
+use App\Models\BackupRun;
 use App\Models\WorkplaceEmailDelivery;
 use App\Services\AssessmentScheduleService;
+use App\Services\BackupService;
 use App\Services\CampaignIntegrityService;
+use App\Services\DocumentExpirationService;
+use App\Services\OperationsHealthService;
 use App\Services\WorkplaceEmailService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -41,6 +45,45 @@ Artisan::command('workplace:email-retry', function (WorkplaceEmailService $servi
 Schedule::command('workplace:email-notifications')->everyMinute()->withoutOverlapping();
 Schedule::command('workplace:email-chat')->everyFifteenMinutes()->withoutOverlapping();
 Schedule::command('workplace:email-rankings')->weeklyOn(1, '09:00')->timezone('Asia/Manila')->withoutOverlapping();
+
+Artisan::command('operations:heartbeat', function (OperationsHealthService $service) {
+    $heartbeat = $service->heartbeat();
+    $this->info('Operations heartbeat: '.$heartbeat->checked_at?->toISOString());
+})->purpose('Record proof that the production scheduler is executing');
+
+Artisan::command('operations:health', function (OperationsHealthService $service) {
+    $snapshot = $service->snapshot();
+    $this->line(json_encode($snapshot, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+
+    return $snapshot['summary']['critical'] > 0 ? self::FAILURE : self::SUCCESS;
+})->purpose('Print the current operations health snapshot');
+
+Schedule::command('operations:heartbeat')->everyMinute()->withoutOverlapping();
+
+Artisan::command('documents:scan-expirations', function (DocumentExpirationService $service) {
+    $this->info(json_encode($service->scan(), JSON_THROW_ON_ERROR));
+})->purpose('Create administrator alerts for expiring contracts and compliance documents');
+
+Schedule::command('documents:scan-expirations')->dailyAt('08:00')->timezone('Asia/Manila')->withoutOverlapping();
+
+Artisan::command('system:backup', function (BackupService $service) {
+    $run = $service->run();
+    $this->{$run->status === 'completed' ? 'info' : 'error'}("Backup #{$run->id}: {$run->status}");
+
+    return $run->status === 'completed' ? self::SUCCESS : self::FAILURE;
+})->purpose('Create an encrypted database and private-file backup');
+
+Artisan::command('system:backup-test {id?}', function (BackupService $service) {
+    $query = BackupRun::query()->where('status', 'completed');
+    $run = $this->argument('id') ? $query->findOrFail($this->argument('id')) : $query->latest('id')->firstOrFail();
+    $result = $service->testRestore($run);
+    $this->info("Backup #{$run->id} restore test passed: ".json_encode($result, JSON_THROW_ON_ERROR));
+})->purpose('Decrypt and verify a backup in an isolated restore test');
+
+Schedule::command('system:backup')
+    ->dailyAt(config('backups.schedule'))
+    ->timezone(config('backups.timezone'))
+    ->withoutOverlapping(360);
 
 Artisan::command('campaigns:integrity', function (CampaignIntegrityService $service) {
     $result = $service->inspect();

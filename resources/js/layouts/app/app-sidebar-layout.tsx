@@ -3,8 +3,10 @@ import { AppContent } from '@/components/app-content';
 import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AppSidebarHeader } from '@/components/app-sidebar-header';
+import DailyBrief from '@/components/daily-brief';
 import { DiverTextUnreadProvider } from '@/components/divertext-unread-provider';
 import { MessageWidget } from '@/components/message-widget';
+import { MiniGamesPanel } from '@/components/mini-games-panel';
 import type { Auth } from '@/types';
 import type { AppLayoutProps } from '@/types';
 
@@ -27,11 +29,15 @@ export default function AppSidebarLayout({
                     className="app-workspace overflow-x-hidden"
                 >
                     <AppSidebarHeader breadcrumbs={breadcrumbs} />
+                    <DailyBrief />
                     {children}
                 </AppContent>
                 {!['trainee', 'qa_admin', 'accounting'].includes(
                     auth.user.role,
                 ) && <MessageWidget />}
+                {['agent', 'team_leader'].includes(auth.user.role) && (
+                    <MiniGamesPanel />
+                )}
             </AppShell>
         </DiverTextUnreadProvider>
     );

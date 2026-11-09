@@ -7,6 +7,8 @@ use App\Models\OvertimeRequest;
 use App\Models\UndertimeRequest;
 use App\Models\User;
 use App\Services\AttendanceScheduleService;
+use App\Services\AuditLogService;
+use App\Services\LeaveCreditService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,7 +22,7 @@ class RequestApprovalController extends Controller
 {
     public function index(Request $request): Response
     {
-        abort_unless($request->user()?->role === 'admin', 403);
+        abort_unless(app(\App\Services\RolePermissionService::class)->can($request->user(), 'approvals.manage'), 403);
 
         return Inertia::render('requests', [
             'undertimeRequests' => UndertimeRequest::query()->with('user')->latest()->get()->map(fn (UndertimeRequest $item) => $this->timeRequestData($item)),
@@ -40,9 +42,9 @@ class RequestApprovalController extends Controller
         ]);
     }
 
-    public function updateStatus(Request $request, string $type, int $requestId, AttendanceScheduleService $attendance): RedirectResponse
+    public function updateStatus(Request $request, string $type, int $requestId, AttendanceScheduleService $attendance, LeaveCreditService $credits): RedirectResponse
     {
-        abort_unless($request->user()?->role === 'admin', 403);
+        abort_unless(app(\App\Services\RolePermissionService::class)->can($request->user(), 'approvals.manage'), 403);
 
         $data = $request->validate([
             'status' => ['required', Rule::in(['approved', 'rejected'])],
@@ -51,7 +53,7 @@ class RequestApprovalController extends Controller
         ]);
 
         $model = $this->requestModel($type)::query()->findOrFail($requestId);
-        DB::transaction(function () use ($model, $type, $request, $data, $attendance): void {
+        DB::transaction(function () use ($model, $type, $request, $data, $attendance, $credits): void {
             $employee = User::query()->lockForUpdate()->findOrFail($model->user_id);
             $model->refresh();
             if ($data['status'] === 'approved') {
@@ -65,6 +67,9 @@ class RequestApprovalController extends Controller
                     $overlap = LeaveRequest::query()->where('user_id', $employee->id)->where('id', '!=', $model->id)->where('status', 'approved')->whereDate('start_date', '<=', $model->end_date)->whereDate('end_date', '>=', $model->start_date)->exists();
                     if ($overlap) {
                         throw ValidationException::withMessages(['status' => 'This employee already has approved leave during these dates.']);
+                    }
+                    if (($data['is_paid'] ?? $model->isPaid()) && ($creditErrors = $credits->paidApprovalErrors($employee, $model))) {
+                        throw ValidationException::withMessages(['status' => $creditErrors[0]]);
                     }
                 } else {
                     $date = $model->request_date->toDateString();
@@ -88,6 +93,7 @@ class RequestApprovalController extends Controller
                 ...($model instanceof LeaveRequest ? ['is_paid' => $data['is_paid'] ?? $model->isPaid()] : []),
             ]);
             $attendance->syncRequest($model);
+            app(AuditLogService::class)->record($request->user(), 'approvals', ucfirst($type).' request '.$data['status'], $model, metadata: ['before_status' => $model->getOriginal('status'), 'after_status' => $model->status, 'review_notes' => $data['review_notes'] ?? null, 'is_paid' => $model instanceof LeaveRequest ? $model->isPaid() : null], subjectId: $employee->id);
         });
 
         return to_route('requests')->with('status', 'Employee request updated successfully.');

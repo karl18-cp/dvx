@@ -225,7 +225,9 @@ export default function EmployeeBackpays() {
                     type="number"
                     label="Year"
                     value={filters.year}
-                    inputProps={{ min: 2020, max: Number(currentYear) }}
+                    slotProps={{
+                        htmlInput: { min: 2020, max: Number(currentYear) },
+                    }}
                     onChange={(event) =>
                         setFilters({ ...filters, year: event.target.value })
                     }
@@ -393,7 +395,7 @@ export default function EmployeeBackpays() {
                 onClose={() => !form.processing && setSelected(null)}
                 fullWidth
                 maxWidth="md"
-                PaperProps={{ sx: { borderRadius: 4 } }}
+                slotProps={{ paper: { sx: { borderRadius: 4 } } }}
             >
                 <DialogTitle className="flex items-center justify-between">
                     <span>
@@ -446,7 +448,7 @@ export default function EmployeeBackpays() {
                                     event.target.value,
                                 )
                             }
-                            InputLabelProps={{ shrink: true }}
+                            slotProps={{ inputLabel: { shrink: true } }}
                         />
                         <TextField
                             disabled={readonly}
@@ -502,7 +504,7 @@ export default function EmployeeBackpays() {
                             onChange={(event) =>
                                 form.setData('claimed_at', event.target.value)
                             }
-                            InputLabelProps={{ shrink: true }}
+                            slotProps={{ inputLabel: { shrink: true } }}
                         />
                     )}
                     <TextField

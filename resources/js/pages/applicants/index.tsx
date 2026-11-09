@@ -112,6 +112,12 @@ export default function Applicants({
                 >
                     Open applicant progress portal ↗
                 </a>
+                <Link
+                    href="/management/interview-calendar"
+                    className="ml-4 inline-block font-semibold text-red-700"
+                >
+                    Open interview calendar →
+                </Link>
                 {statusMessage && (
                     <Alert severity="info">{statusMessage}</Alert>
                 )}

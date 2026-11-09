@@ -81,7 +81,11 @@ class PublicFormSettingsTest extends TestCase
     {
         $data = app(PublicFormService::class)->defaults('application');
         foreach (['manager', 'qa_admin', 'team_leader', 'agent', 'trainee'] as $role) {
-            $this->actingAs(User::factory()->create(['role' => $role, 'status' => 'active']));
+            $this->actingAs(User::factory()->create([
+                'role' => $role,
+                'status' => 'active',
+                'training_status' => $role === 'trainee' ? 'in_training' : null,
+            ]));
             $this->get('/public-form-settings')->assertForbidden();
             $this->put('/public-form-settings/application', $data)->assertForbidden();
         }

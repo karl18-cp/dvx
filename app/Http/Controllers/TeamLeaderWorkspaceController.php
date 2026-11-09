@@ -8,6 +8,7 @@ use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
 use App\Services\TeamLeaderWorkspaceService;
+use App\Services\AuditLogService;
 use App\Services\TraineeTeamService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -78,6 +79,6 @@ class TeamLeaderWorkspaceController extends Controller
 
     private function audit(User $actor, User $target, string $action, array $metadata): void
     {
-        DB::table('assessment_activity_logs')->insert(['actor_id' => $actor->id, 'action' => $action, 'target_type' => User::class, 'target_id' => $target->id, 'metadata' => json_encode($metadata, JSON_THROW_ON_ERROR), 'created_at' => now()]);
+        app(AuditLogService::class)->record($actor, 'scheduling', $action, $target, metadata: $metadata, subjectId: $target->id);
     }
 }

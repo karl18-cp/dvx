@@ -16,7 +16,7 @@ class TrainingPlanController extends Controller
 {
     private function authorizeManager(Request $request): void
     {
-        abort_unless($request->user()->status === 'active' && in_array($request->user()->role, ['admin', 'qa_admin'], true), 403);
+        abort_unless(app(\App\Services\RolePermissionService::class)->can($request->user(), 'training.manage'), 403);
     }
 
     public function index(Request $request)

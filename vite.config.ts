@@ -6,6 +6,11 @@ import laravel from 'laravel-vite-plugin';
 import { bunny } from 'laravel-vite-plugin/fonts';
 import { defineConfig } from 'vite';
 
+const php =
+    process.platform === 'win32' && process.env.USERPROFILE
+        ? `"${process.env.USERPROFILE}\\.config\\herd\\bin\\php84\\php.exe"`
+        : 'php';
+
 export default defineConfig({
     plugins: [
         laravel({
@@ -24,8 +29,11 @@ export default defineConfig({
             },
         }),
         tailwindcss(),
-        wayfinder({
-            formVariants: true,
-        }),
+        process.env.SKIP_WAYFINDER === '1'
+            ? null
+            : wayfinder({
+                  formVariants: true,
+                  command: `${php} artisan wayfinder:generate`,
+              }),
     ],
 });

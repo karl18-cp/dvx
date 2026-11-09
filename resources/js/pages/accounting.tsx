@@ -17,15 +17,17 @@ import { BadgeDollarSign, Mail, Plus, Search, X } from 'lucide-react';
 import { useState } from 'react';
 import AccountingDocuments from '@/components/accounting-documents';
 import AccountingExpenses from '@/components/accounting-expenses';
+import EmployeeBackpays from '@/components/employee-backpays';
 import EmployeeBankInformation from '@/components/employee-bank-information';
 import EmployeeContracts from '@/components/employee-contracts';
-import EmployeeBackpays from '@/components/employee-backpays';
-import ThirteenthMonthPay from '@/components/thirteenth-month-pay';
+import GovernmentTaxReports from '@/components/government-tax-reports';
 import PayrollCalculation, {
     payrollDefaults,
     PayrollBreakdown,
 } from '@/components/payroll-calculation';
 import type { PayrollSnapshot } from '@/components/payroll-calculation';
+import ThirteenthMonthPay from '@/components/thirteenth-month-pay';
+import TraineeAttendanceSalaryTracker from '@/components/trainee-attendance-salary-tracker';
 import { money } from '@/components/training-allowance-details';
 import type { Allowance } from '@/components/training-allowance-details';
 import {
@@ -43,6 +45,10 @@ type Entry = {
     deduction_cents: number;
     net_cents: number;
     status: string;
+    parent_entry_id?: number | null;
+    correction_type?: 'adjustment' | 'reversal' | null;
+    correction_direction?: 'credit' | 'debit' | null;
+    correction_reason?: string | null;
     paid_at: string | null;
     employee: { id: number; name: string; username: string; email?: string };
     notes?: string;
@@ -50,8 +56,16 @@ type Entry = {
     payment_reference?: string;
     void_reason?: string;
     creator?: { name: string };
+    submitter?: { name: string };
     approver?: { name: string };
+    locker?: { name: string };
     payer?: { name: string };
+    parent_entry?: {
+        id: number;
+        description: string;
+        status: string;
+        net_cents: number;
+    };
     source_snapshot?: {
         employee_name: string;
         employee_id: string;
@@ -87,7 +101,10 @@ type Props = {
         prev_page_url: string | null;
         next_page_url: string | null;
     };
-    summary: Record<'draft' | 'approved' | 'paid', number>;
+    summary: Record<
+        'draft' | 'for_review' | 'approved' | 'locked' | 'paid',
+        number
+    >;
     employees: { id: number; name: string; username: string; status: string }[];
     contractEmployees: {
         id: number;
@@ -127,6 +144,7 @@ export default function Accounting({
           )
         : adminTab;
     const currentSection = section ? accountingSections[tab] : null;
+    const activeSlug = accountingSections[tab]?.slug;
     const [payrollOpen, setPayrollOpen] = useState(false);
     const [attendanceReady, setAttendanceReady] = useState(false);
     const payroll = useForm({
@@ -144,13 +162,31 @@ export default function Accounting({
     const [detail, setDetail] = useState<Entry | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [action, setAction] = useState<'approve' | 'pay' | 'void' | ''>('');
+    const [action, setAction] = useState<
+        | 'submit'
+        | 'approve'
+        | 'lock'
+        | 'pay'
+        | 'return'
+        | 'void'
+        | 'correct'
+        | ''
+    >('');
     const update = useForm({
         action: '',
         paid_at: today(),
         payment_method: 'bank_transfer',
         payment_reference: '',
         void_reason: '',
+        transition_reason: '',
+    });
+    const correction = useForm({
+        request_key: '',
+        correction_type: 'adjustment',
+        correction_direction: 'credit',
+        amount: '',
+        description: 'Payroll adjustment',
+        reason: '',
     });
     const emailPayslip = useForm({});
     const [enrollment, setEnrollment] = useState('');
@@ -170,6 +206,7 @@ export default function Accounting({
                     update.processing ||
                     payroll.processing ||
                     emailPayslip.processing ||
+                    correction.processing ||
                     preparing
                 }
             >
@@ -182,6 +219,7 @@ export default function Accounting({
         setError('');
         setAction('');
         update.clearErrors();
+        correction.clearErrors();
         emailPayslip.clearErrors();
 
         try {
@@ -315,11 +353,13 @@ export default function Accounting({
                 </Alert>
             )}
             {(!section || tab === 0) && (
-                <div className="grid gap-4 sm:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                     {(
                         [
-                            ['draft', 'Drafts awaiting review'],
-                            ['approved', 'Approved, awaiting payment'],
+                            ['draft', 'Draft entries'],
+                            ['for_review', 'For review'],
+                            ['approved', 'Approved, awaiting lock'],
+                            ['locked', 'Locked, awaiting payment'],
                             ['paid', 'Payments recorded · all time'],
                         ] as const
                     ).map(([key, label]) => (
@@ -346,41 +386,40 @@ export default function Accounting({
                             setError('');
                         }}
                     >
-                        <Tab label="Payment register" />
-                        <Tab label="Training allowances" />
-                        <Tab label="Expenses" />
-                        <Tab label="Bank information" />
-                        <Tab label="Employee contracts" />
-                        <Tab label="Invoices" />
-                        <Tab label="Receivables" />
-                        <Tab label="Payables" />
-                        <Tab label="Backpay" />
-                        <Tab label="13th month pay" />
+                        {accountingSections.map((item) => (
+                            <Tab key={item.slug} label={item.title} />
+                        ))}
                     </Tabs>
                 )}
                 <div className="p-5">
-                    {tab === 9 ? (
+                    {activeSlug === 'government-tax-reports' ? (
+                        <GovernmentTaxReports />
+                    ) : activeSlug === '13th-month-pay' ? (
                         <ThirteenthMonthPay />
-                    ) : tab === 8 ? (
+                    ) : activeSlug === 'backpay' ? (
                         <EmployeeBackpays />
-                    ) : tab >= 5 && tab <= 7 ? (
+                    ) : activeSlug === 'invoices' ||
+                      activeSlug === 'receivables' ||
+                      activeSlug === 'payables' ? (
                         <AccountingDocuments
-                            key={tab}
+                            key={activeSlug}
                             view={
-                                tab === 5
+                                activeSlug === 'invoices'
                                     ? 'invoices'
-                                    : tab === 6
+                                    : activeSlug === 'receivables'
                                       ? 'receivable'
                                       : 'payable'
                             }
                         />
-                    ) : tab === 4 ? (
+                    ) : activeSlug === 'contracts' ? (
                         <EmployeeContracts employees={contractEmployees} />
-                    ) : tab === 3 ? (
+                    ) : activeSlug === 'bank-information' ? (
                         <EmployeeBankInformation />
-                    ) : tab === 2 ? (
+                    ) : activeSlug === 'expenses' ? (
                         <AccountingExpenses />
-                    ) : tab === 0 ? (
+                    ) : activeSlug === 'trainee-tracker' ? (
+                        <TraineeAttendanceSalaryTracker />
+                    ) : activeSlug === 'payment-register' ? (
                         <>
                             <form
                                 className="mb-5 grid gap-3 md:grid-cols-[1fr_180px_200px_auto]"
@@ -417,13 +456,18 @@ export default function Accounting({
                                     }
                                 >
                                     <MenuItem value="">All statuses</MenuItem>
-                                    {['draft', 'approved', 'paid', 'void'].map(
-                                        (value) => (
-                                            <MenuItem key={value} value={value}>
-                                                {value}
-                                            </MenuItem>
-                                        ),
-                                    )}
+                                    {[
+                                        'draft',
+                                        'for_review',
+                                        'approved',
+                                        'locked',
+                                        'paid',
+                                        'void',
+                                    ].map((value) => (
+                                        <MenuItem key={value} value={value}>
+                                            {value}
+                                        </MenuItem>
+                                    ))}
                                 </TextField>
                                 <TextField
                                     size="small"
@@ -436,6 +480,9 @@ export default function Accounting({
                                 >
                                     <MenuItem value="">All types</MenuItem>
                                     <MenuItem value="payroll">Payroll</MenuItem>
+                                    <MenuItem value="payroll_adjustment">
+                                        Payroll correction
+                                    </MenuItem>
                                     <MenuItem value="training_allowance">
                                         Training allowance
                                     </MenuItem>
@@ -523,10 +570,17 @@ export default function Accounting({
                                                             entry.status ===
                                                             'paid'
                                                                 ? 'success'
-                                                                : entry.status ===
-                                                                    'approved'
+                                                                : [
+                                                                        'approved',
+                                                                        'locked',
+                                                                    ].includes(
+                                                                        entry.status,
+                                                                    )
                                                                   ? 'info'
-                                                                  : 'default'
+                                                                  : entry.status ===
+                                                                      'for_review'
+                                                                    ? 'warning'
+                                                                    : 'default'
                                                         }
                                                     />
                                                 </td>
@@ -867,9 +921,28 @@ export default function Accounting({
                             </div>
                             <p className="text-sm text-slate-500">
                                 Created by {detail.creator?.name}
+                                {detail.submitter &&
+                                    ` · Submitted by ${detail.submitter.name}`}
                                 {detail.approver &&
                                     ` · Approved by ${detail.approver.name}`}
                             </p>
+                            {detail.locker && (
+                                <p className="text-sm text-slate-500">
+                                    Locked by {detail.locker.name}
+                                </p>
+                            )}
+                            {detail.correction_type && (
+                                <Alert severity="warning">
+                                    Documented {detail.correction_type} (
+                                    {detail.correction_direction}) for original
+                                    entry ACC-
+                                    {String(detail.parent_entry_id).padStart(
+                                        6,
+                                        '0',
+                                    )}
+                                    . Reason: {detail.correction_reason}
+                                </Alert>
+                            )}
                             {detail.notes && (
                                 <p className="text-sm whitespace-pre-wrap">
                                     {detail.notes}
@@ -925,6 +998,13 @@ export default function Accounting({
                                     payments are read-only.
                                 </Alert>
                             )}
+                            {detail.status === 'locked' && (
+                                <Alert severity="warning">
+                                    This entry is locked and immutable. Record
+                                    payment as-is, or create a documented
+                                    adjustment or reversal.
+                                </Alert>
+                            )}
                             {detail.status === 'void' && (
                                 <Alert severity="warning">
                                     Voided: {detail.void_reason}
@@ -942,11 +1022,35 @@ export default function Accounting({
                                     </Alert>
                                 ),
                             )}
+                            {Object.values(correction.errors).map(
+                                (message, i) => (
+                                    <Alert
+                                        key={`correction-${i}`}
+                                        severity="error"
+                                    >
+                                        {String(message)}
+                                    </Alert>
+                                ),
+                            )}
+                            {action === 'submit' && (
+                                <Alert severity="info">
+                                    Submit this draft for an independent review.
+                                    Amounts remain changeable until it is
+                                    locked.
+                                </Alert>
+                            )}
                             {action === 'approve' && (
                                 <Alert severity="info">
                                     Confirm that you have reviewed the
                                     recipient, period and amounts before
                                     approving this entry.
+                                </Alert>
+                            )}
+                            {action === 'lock' && (
+                                <Alert severity="warning">
+                                    Locking freezes this record. Any later
+                                    correction must be documented as a linked
+                                    adjustment or reversal.
                                 </Alert>
                             )}
                             {action === 'pay' && (
@@ -1022,6 +1126,117 @@ export default function Accounting({
                                     }
                                 />
                             )}
+                            {action === 'return' && (
+                                <TextField
+                                    multiline
+                                    minRows={3}
+                                    label="Reason for returning to draft"
+                                    value={update.data.transition_reason}
+                                    onChange={(e) =>
+                                        update.setData(
+                                            'transition_reason',
+                                            e.target.value,
+                                        )
+                                    }
+                                />
+                            )}
+                            {action === 'correct' && (
+                                <div className="grid gap-4">
+                                    <Alert severity="info">
+                                        The original record will not be changed.
+                                        This creates a linked correction draft
+                                        with its own approval workflow.
+                                    </Alert>
+                                    <div className="grid gap-4 sm:grid-cols-2">
+                                        <TextField
+                                            select
+                                            label="Correction type"
+                                            value={
+                                                correction.data.correction_type
+                                            }
+                                            onChange={(e) => {
+                                                const value = e.target.value;
+                                                correction.setData(
+                                                    'correction_type',
+                                                    value,
+                                                );
+                                                correction.setData(
+                                                    'description',
+                                                    value === 'reversal'
+                                                        ? 'Payroll reversal'
+                                                        : 'Payroll adjustment',
+                                                );
+                                            }}
+                                        >
+                                            <MenuItem value="adjustment">
+                                                Adjustment
+                                            </MenuItem>
+                                            <MenuItem value="reversal">
+                                                Full reversal
+                                            </MenuItem>
+                                        </TextField>
+                                        {correction.data.correction_type ===
+                                            'adjustment' && (
+                                            <TextField
+                                                select
+                                                label="Direction"
+                                                value={
+                                                    correction.data
+                                                        .correction_direction
+                                                }
+                                                onChange={(e) =>
+                                                    correction.setData(
+                                                        'correction_direction',
+                                                        e.target.value,
+                                                    )
+                                                }
+                                            >
+                                                <MenuItem value="credit">
+                                                    Credit employee
+                                                </MenuItem>
+                                                <MenuItem value="debit">
+                                                    Deduct from employee
+                                                </MenuItem>
+                                            </TextField>
+                                        )}
+                                    </div>
+                                    {correction.data.correction_type ===
+                                        'adjustment' && (
+                                        <TextField
+                                            label="Correction amount (PHP)"
+                                            value={correction.data.amount}
+                                            onChange={(e) =>
+                                                correction.setData(
+                                                    'amount',
+                                                    e.target.value,
+                                                )
+                                            }
+                                        />
+                                    )}
+                                    <TextField
+                                        label="Correction description"
+                                        value={correction.data.description}
+                                        onChange={(e) =>
+                                            correction.setData(
+                                                'description',
+                                                e.target.value,
+                                            )
+                                        }
+                                    />
+                                    <TextField
+                                        multiline
+                                        minRows={3}
+                                        label="Documented reason"
+                                        value={correction.data.reason}
+                                        onChange={(e) =>
+                                            correction.setData(
+                                                'reason',
+                                                e.target.value,
+                                            )
+                                        }
+                                    />
+                                </div>
+                            )}
                         </div>
                     )}
                 </DialogContent>
@@ -1050,6 +1265,17 @@ export default function Accounting({
                                 <Button
                                     variant="contained"
                                     onClick={() => {
+                                        setAction('submit');
+                                        update.setData('action', 'submit');
+                                    }}
+                                >
+                                    Submit for review
+                                </Button>
+                            )}
+                            {detail.status === 'for_review' && (
+                                <Button
+                                    variant="contained"
+                                    onClick={() => {
                                         setAction('approve');
                                         update.setData('action', 'approve');
                                     }}
@@ -1061,6 +1287,17 @@ export default function Accounting({
                                 <Button
                                     variant="contained"
                                     onClick={() => {
+                                        setAction('lock');
+                                        update.setData('action', 'lock');
+                                    }}
+                                >
+                                    Lock payroll
+                                </Button>
+                            )}
+                            {detail.status === 'locked' && (
+                                <Button
+                                    variant="contained"
+                                    onClick={() => {
                                         setAction('pay');
                                         update.setData({
                                             action: 'pay',
@@ -1068,13 +1305,28 @@ export default function Accounting({
                                             payment_method: 'bank_transfer',
                                             payment_reference: '',
                                             void_reason: '',
+                                            transition_reason: '',
                                         });
                                     }}
                                 >
                                     Record payment
                                 </Button>
                             )}
-                            {['draft', 'approved'].includes(detail.status) && (
+                            {['for_review', 'approved'].includes(
+                                detail.status,
+                            ) && (
+                                <Button
+                                    onClick={() => {
+                                        setAction('return');
+                                        update.setData('action', 'return');
+                                    }}
+                                >
+                                    Return to draft
+                                </Button>
+                            )}
+                            {['draft', 'for_review'].includes(
+                                detail.status,
+                            ) && (
                                 <Button
                                     color="error"
                                     onClick={() => {
@@ -1085,9 +1337,27 @@ export default function Accounting({
                                     Void entry
                                 </Button>
                             )}
+                            {detail.kind === 'payroll' &&
+                                ['locked', 'paid'].includes(detail.status) && (
+                                    <Button
+                                        color="warning"
+                                        variant="outlined"
+                                        onClick={() => {
+                                            correction.reset();
+                                            correction.setData(
+                                                'request_key',
+                                                crypto.randomUUID(),
+                                            );
+                                            correction.clearErrors();
+                                            setAction('correct');
+                                        }}
+                                    >
+                                        Adjustment / reversal
+                                    </Button>
+                                )}
                         </>
                     )}
-                    {detail && action && (
+                    {detail && action && action !== 'correct' && (
                         <Button
                             variant="contained"
                             disabled={update.processing}
@@ -1104,11 +1374,38 @@ export default function Accounting({
                                 )
                             }
                         >
-                            {action === 'approve'
-                                ? 'Confirm approval'
-                                : action === 'pay'
-                                  ? 'Save payment record'
-                                  : 'Confirm void'}
+                            {action === 'submit'
+                                ? 'Submit for review'
+                                : action === 'approve'
+                                  ? 'Confirm approval'
+                                  : action === 'lock'
+                                    ? 'Confirm lock'
+                                    : action === 'pay'
+                                      ? 'Save payment record'
+                                      : action === 'return'
+                                        ? 'Return to draft'
+                                        : 'Confirm void'}
+                        </Button>
+                    )}
+                    {detail && action === 'correct' && (
+                        <Button
+                            variant="contained"
+                            color="warning"
+                            disabled={correction.processing}
+                            onClick={() =>
+                                correction.post(
+                                    `/accounting/entries/${detail.id}/corrections`,
+                                    {
+                                        preserveScroll: true,
+                                        onSuccess: () => {
+                                            setDetail(null);
+                                            setAction('');
+                                        },
+                                    },
+                                )
+                            }
+                        >
+                            Create correction draft
                         </Button>
                     )}
                 </DialogActions>

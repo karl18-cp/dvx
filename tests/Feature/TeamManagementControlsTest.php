@@ -71,7 +71,7 @@ class TeamManagementControlsTest extends TestCase
         TeamMember::create(['user_id' => $agent->id, 'team_id' => $teams[0]->id]);
         $data = ['attendance_date' => '2026-09-28', 'field' => 'time_in', 'time' => '08:00'];
         $this->actingAs($leader)->put("/attendance/$agent->id/time", $data)->assertRedirect()->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('assessment_activity_logs', ['actor_id' => $leader->id, 'target_id' => $agent->id, 'action' => 'Attendance time corrected']);
+        $this->assertDatabaseHas('activity_logs', ['actor_id' => $leader->id, 'target_id' => $agent->id, 'action' => 'Attendance time corrected']);
         foreach ([$leader, $outside] as $user) {
             $this->put("/attendance/$user->id/time", $data)->assertForbidden();
         }

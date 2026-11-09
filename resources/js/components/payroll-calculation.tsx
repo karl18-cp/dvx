@@ -20,6 +20,7 @@ export const payrollDefaults = {
     sss: '0',
     philhealth: '0',
     pagibig: '0',
+    withholding_tax: '0',
     other_deductions: '0',
 };
 type Fields = typeof payrollDefaults;
@@ -48,6 +49,7 @@ const deductions = [
     ['sss', 'SSS'],
     ['philhealth', 'PhilHealth'],
     ['pagibig', 'Pag-IBIG'],
+    ['withholding_tax', 'BIR withholding tax'],
     ['other_deductions', 'Other deductions'],
 ] as const;
 
@@ -196,6 +198,7 @@ export default function PayrollCalculation({
                                       sss: '0',
                                       philhealth: '0',
                                       pagibig: '0',
+                                      withholding_tax: '0',
                                       other_deductions: '0',
                                   }
                                 : {}),

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\EmployeeBankAccount;
 use App\Models\User;
 use App\Services\AccountingService;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -35,7 +36,7 @@ class EmployeeBankAccountController extends Controller
 
     public function store(Request $request, AccountingService $service)
     {
-        $service->authorize($request->user());
+        $service->authorizeFinance($request->user());
         $data = $this->validated($request);
         $request->validate(['request_key' => ['required', 'uuid']]);
         DB::transaction(function () use ($request, $data) {
@@ -53,7 +54,7 @@ class EmployeeBankAccountController extends Controller
 
     public function update(Request $request, EmployeeBankAccount $bankAccount, AccountingService $service)
     {
-        $service->authorize($request->user());
+        $service->authorizeFinance($request->user());
         $data = $this->validated($request);
         $request->validate(['version' => ['required', 'integer', 'min:1']]);
         DB::transaction(function () use ($request, $bankAccount, $data) {
@@ -70,7 +71,7 @@ class EmployeeBankAccountController extends Controller
 
     public function destroy(Request $request, EmployeeBankAccount $bankAccount, AccountingService $service)
     {
-        $service->authorize($request->user());
+        $service->authorizeFinance($request->user());
         $request->validate(['version' => ['required', 'integer', 'min:1']]);
         DB::transaction(function () use ($request, $bankAccount) {
             $account = EmployeeBankAccount::whereKey($bankAccount->id)->lockForUpdate()->firstOrFail();
@@ -115,6 +116,6 @@ class EmployeeBankAccountController extends Controller
 
     private function audit(Request $request, EmployeeBankAccount $account, string $action): void
     {
-        DB::table('assessment_activity_logs')->insert(['actor_id' => $request->user()->id, 'action' => $action, 'target_type' => EmployeeBankAccount::class, 'target_id' => $account->id, 'metadata' => json_encode(['employee_id' => $account->user_id]), 'created_at' => now()]);
+        app(AuditLogService::class)->record($request->user(), 'banking', $action, $account, metadata: ['employee_id' => $account->user_id], subjectId: $account->user_id);
     }
 }

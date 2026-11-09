@@ -10,7 +10,7 @@ class AccountStatusService
 {
     public function visible(User $actor)
     {
-        abort_unless($actor->status === 'active' && in_array($actor->role, ['admin', 'qa_admin', 'team_leader'], true), 403);
+        abort_unless(app(RolePermissionService::class)->can($actor, 'account_status.manage'), 403);
 
         return match ($actor->role) {
             'team_leader' => app(TeamLeaderWorkspaceService::class)->members($actor),
@@ -46,7 +46,7 @@ class AccountStatusService
                 DB::table('sessions')->where('user_id', $employee->id)->delete();
             }
             $employee->save();
-            DB::table('assessment_activity_logs')->insert(['actor_id' => $actor->id, 'action' => 'Account status changed', 'target_type' => User::class, 'target_id' => $employee->id, 'metadata' => json_encode(['before' => $before, 'after' => ['status' => $employee->status, 'training_status' => $employee->training_status], 'notes' => $notes], JSON_THROW_ON_ERROR), 'created_at' => now()]);
+            app(AuditLogService::class)->record($actor, 'account_status', 'Account status changed', $employee, metadata: ['before' => $before, 'after' => ['status' => $employee->status, 'training_status' => $employee->training_status], 'notes' => $notes], subjectId: $employee->id);
         });
     }
 }

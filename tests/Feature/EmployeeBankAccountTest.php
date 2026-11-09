@@ -46,7 +46,7 @@ class EmployeeBankAccountTest extends TestCase
         $this->assertStringNotContainsString($data['account_number'], $list->getContent());
         $this->assertStringNotContainsString($data['account_holder'], $list->getContent());
         $this->getJson('/accounting/bank-accounts/'.$record->id)->assertOk()->assertJsonPath('account_number', $data['account_number'])->assertHeader('Cache-Control', 'no-store, private');
-        foreach (DB::table('assessment_activity_logs')->pluck('metadata') as $metadata) {
+        foreach (DB::table('activity_logs')->pluck('metadata') as $metadata) {
             $this->assertStringNotContainsString($data['account_number'], $metadata);
         }
     }
@@ -87,7 +87,7 @@ class EmployeeBankAccountTest extends TestCase
         $this->assertDatabaseMissing('employee_bank_accounts', ['id' => $record->id]);
         $this->assertDatabaseCount('employee_bank_accounts', 1);
         $this->assertDatabaseHas('users', ['id' => $employee->id]);
-        $this->assertDatabaseHas('assessment_activity_logs', ['action' => 'Bank information deleted', 'target_id' => $record->id]);
+        $this->assertDatabaseHas('activity_logs', ['action' => 'Bank information deleted', 'target_id' => $record->id]);
     }
 
     public function test_duplicate_and_invalid_records_are_rejected_without_flashing_bank_details(): void

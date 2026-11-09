@@ -11,6 +11,12 @@ export const accountingSections = [
             'Prepare trainee allowances from eligible attendance days.',
     },
     {
+        slug: 'trainee-tracker',
+        title: 'Trainee attendance & salary',
+        description:
+            'Track trainee attendance, earned salary, payouts, and outstanding balances.',
+    },
+    {
         slug: 'expenses',
         title: 'Expenses',
         description:
@@ -25,7 +31,7 @@ export const accountingSections = [
         slug: 'contracts',
         title: 'Employee contracts',
         description:
-            'Store training and employment contracts linked to employee accounts.',
+            'Store training, employment, and quitclaim documents linked to employee accounts.',
     },
     {
         slug: 'invoices',
@@ -54,6 +60,12 @@ export const accountingSections = [
         title: '13th month pay',
         description:
             'Review the running accrual calculated from paid basic payroll earnings.',
+    },
+    {
+        slug: 'government-tax-reports',
+        title: 'Government & tax reports',
+        description:
+            'Prepare SSS, PhilHealth, Pag-IBIG, BIR withholding, 2316, and annual payroll reports.',
     },
 ] as const;
 

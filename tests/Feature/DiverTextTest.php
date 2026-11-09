@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Campaign;
+use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\Team;
 use App\Models\TeamLeaderAssignment;
@@ -99,6 +100,33 @@ class DiverTextTest extends TestCase
         $this->actingAs($second)->postJson("/divertext/$room/messages", $data)->assertForbidden();
     }
 
+    public function test_messages_cannot_be_edited_or_unsent(): void
+    {
+        $sender = $this->person();
+        $room = $this->direct($sender, $this->person());
+        $messageId = $this->message($room, 'Permanent message');
+
+        $this->patchJson("/divertext/$room/messages/$messageId", ['body' => 'Changed'])->assertNotFound();
+        $this->deleteJson("/divertext/$room/messages/$messageId")->assertNotFound();
+
+        $message = ChatMessage::findOrFail($messageId);
+        try {
+            $message->update(['body' => 'Changed internally']);
+            $this->fail('Updating a DiverText message should throw an exception.');
+        } catch (\LogicException $exception) {
+            $this->assertSame('DiverText messages cannot be edited.', $exception->getMessage());
+        }
+
+        try {
+            $message->delete();
+            $this->fail('Deleting a DiverText message should throw an exception.');
+        } catch (\LogicException $exception) {
+            $this->assertSame('DiverText messages cannot be unsent.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('chat_messages', ['id' => $messageId, 'body' => 'Permanent message']);
+    }
+
     public function test_history_pagination_preserves_order_without_skipping_messages(): void
     {
         $first = $this->person();
@@ -126,5 +154,87 @@ class DiverTextTest extends TestCase
         $peer->update(['status' => 'inactive']);
         $this->postJson("/divertext/$room/messages", ['request_id' => Str::uuid(), 'body' => 'Hello'])->assertUnprocessable();
         $this->actingAs($peer)->getJson('/divertext/rooms')->assertForbidden();
+    }
+
+    public function test_admin_can_create_a_private_custom_group_for_selected_members(): void
+    {
+        $admin = $this->person('admin');
+        $first = $this->person();
+        $second = $this->person();
+        $outsider = $this->person();
+        $room = $this->actingAs($admin)->postJson('/divertext/groups', [
+            'name' => 'Client Readiness',
+            'member_ids' => [$first->id, $second->id],
+        ])->assertCreated()->assertJsonPath('type', 'group')->assertJsonPath('name', 'Client Readiness')->json('id');
+
+        $this->assertDatabaseHas('chat_conversations', ['id' => $room, 'type' => 'group', 'created_by' => $admin->id]);
+        $this->assertSame(3, ChatConversation::findOrFail($room)->members()->count());
+        foreach ([$admin, $first, $second] as $member) {
+            $this->actingAs($member)->getJson("/divertext/$room/messages")->assertOk();
+        }
+        $this->actingAs($outsider)->getJson("/divertext/$room/messages")->assertForbidden();
+        $this->postJson('/divertext/groups', ['name' => 'Not allowed', 'member_ids' => [$first->id, $second->id]])->assertForbidden();
+    }
+
+    public function test_team_leader_can_only_add_people_from_their_teams(): void
+    {
+        $campaign = Campaign::create(['name' => 'Groups campaign', 'abbreviation' => 'GRP']);
+        $team = Team::create(['name' => 'Own team', 'campaign_id' => $campaign->id]);
+        $leader = $this->person('team_leader');
+        $first = $this->person();
+        $second = $this->person();
+        $other = $this->person();
+        TeamLeaderAssignment::create(['team_id' => $team->id, 'user_id' => $leader->id]);
+        TeamMember::create(['team_id' => $team->id, 'user_id' => $first->id]);
+        TeamMember::create(['team_id' => $team->id, 'user_id' => $second->id]);
+
+        $this->actingAs($leader)->postJson('/divertext/groups', ['name' => 'Own agents', 'member_ids' => [$first->id, $second->id]])->assertCreated();
+        $this->postJson('/divertext/groups', ['name' => 'Cross team', 'member_ids' => [$first->id, $other->id]])->assertForbidden();
+    }
+
+    public function test_group_creator_can_add_and_remove_members_without_leaving_the_group(): void
+    {
+        $admin = $this->person('admin');
+        $first = $this->person();
+        $second = $this->person();
+        $replacement = $this->person();
+        $room = $this->actingAs($admin)->postJson('/divertext/groups', [
+            'name' => 'Managed group',
+            'member_ids' => [$first->id, $second->id],
+        ])->assertCreated()->assertJsonPath('can_manage_members', true)->json('id');
+
+        $this->getJson("/divertext/$room/members")
+            ->assertOk()
+            ->assertJsonPath('creator_id', $admin->id)
+            ->assertJsonCount(3, 'members');
+        $this->patchJson("/divertext/$room/members", ['member_ids' => [$second->id, $replacement->id]])
+            ->assertOk()
+            ->assertJsonPath('subtitle', '3 members');
+
+        $conversation = ChatConversation::findOrFail($room);
+        $this->assertEqualsCanonicalizing([$admin->id, $second->id, $replacement->id], $conversation->members()->pluck('users.id')->all());
+        $this->actingAs($first)->getJson("/divertext/$room/messages")->assertForbidden();
+        $this->actingAs($replacement)->getJson("/divertext/$room/messages")->assertOk();
+    }
+
+    public function test_only_creator_can_manage_group_and_team_leader_additions_stay_in_scope(): void
+    {
+        $campaign = Campaign::create(['name' => 'Managed campaign', 'abbreviation' => 'MGR']);
+        $team = Team::create(['name' => 'Managed team', 'campaign_id' => $campaign->id]);
+        $leader = $this->person('team_leader');
+        $first = $this->person();
+        $second = $this->person();
+        $outsider = $this->person();
+        TeamLeaderAssignment::create(['team_id' => $team->id, 'user_id' => $leader->id]);
+        TeamMember::create(['team_id' => $team->id, 'user_id' => $first->id]);
+        TeamMember::create(['team_id' => $team->id, 'user_id' => $second->id]);
+        $room = $this->actingAs($leader)->postJson('/divertext/groups', ['name' => 'Scoped group', 'member_ids' => [$first->id, $second->id]])->assertCreated()->json('id');
+
+        $this->actingAs($first)->getJson("/divertext/$room/members")->assertForbidden();
+        $this->patchJson("/divertext/$room/members", ['member_ids' => [$leader->id, $second->id]])->assertForbidden();
+        $this->actingAs($leader)->patchJson("/divertext/$room/members", ['member_ids' => [$first->id, $outsider->id]])->assertForbidden();
+        $this->patchJson("/divertext/$room/members", ['member_ids' => []])->assertUnprocessable();
+        $this->patchJson("/divertext/$room/members", ['member_ids' => [$first->id]])->assertOk();
+        $this->assertEqualsCanonicalizing([$leader->id, $first->id], ChatConversation::findOrFail($room)->members()->pluck('users.id')->all());
     }
 }

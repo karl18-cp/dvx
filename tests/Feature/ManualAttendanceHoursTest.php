@@ -48,7 +48,7 @@ class ManualAttendanceHoursTest extends TestCase
             }
             $this->get('/attendance')->assertOk();
         }
-        $this->assertDatabaseHas('assessment_activity_logs', ['action' => 'Attendance manual hours corrected']);
+        $this->assertDatabaseHas('activity_logs', ['action' => 'Attendance manual hours corrected']);
     }
 
     public function test_team_leaders_are_limited_to_members_of_all_their_teams(): void
@@ -88,7 +88,7 @@ class ManualAttendanceHoursTest extends TestCase
         $this->put($url, $this->payload(['clear' => true]))->assertSessionHasNoErrors();
         $this->assertNull(AttendanceRecord::sole()->manual_hours);
         $this->assertNull(AttendanceRecord::sole()->total_minutes);
-        $this->assertDatabaseHas('assessment_activity_logs', ['action' => 'Attendance manual hours removed']);
+        $this->assertDatabaseHas('activity_logs', ['action' => 'Attendance manual hours removed']);
         $accountant->update(['status' => 'suspended']);
         $this->put($url, $this->payload())->assertRedirect('/login');
     }

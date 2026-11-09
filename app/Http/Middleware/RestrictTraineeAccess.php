@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\RolePermissionService;
 use Closure;
 use Illuminate\Http\Request;
 
@@ -18,10 +19,13 @@ class RestrictTraineeAccess
                 return $next($request);
             }
             abort_unless($user->canAccessAccount(), 403, 'Your training access has ended. Please contact your administrator.');
+            if (app(RolePermissionService::class)->allowsRestrictedPath($user, $request)) {
+                return $next($request);
+            }
             if ($request->is('dashboard')) {
                 return redirect('/my-attendance');
             }
-            abort_unless($request->is('my-training-plan', 'my-attendance', 'my-attendance/*', 'assessments', 'assessments/*', 'my-coaching', 'my-coaching/*', 'settings', 'settings/*', 'user/*', 'notification-feed', 'notification-feed/*', 'users/*/photo'), 403);
+            abort_unless($request->is('daily-brief', 'daily-brief/*', 'my-training-plan', 'my-attendance', 'my-attendance/*', 'performance', 'performance/*', 'assessments', 'assessments/*', 'my-coaching', 'my-coaching/*', 'settings', 'settings/*', 'user/*', 'notification-feed', 'notification-feed/*', 'users/*/photo'), 403);
         }
 
         return $next($request);

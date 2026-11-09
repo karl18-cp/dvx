@@ -47,7 +47,7 @@ class TraineePortalTest extends TestCase
         $this->assertSame('DVX011', $numbers->next());
         $this->post('/trainees/'.$trainee->id.'/employee-account')->assertSessionHasErrors('employee');
         $this->assertSame('DVX011', $numbers->next());
-        $this->assertDatabaseHas('assessment_activity_logs', ['action' => 'Account status changed', 'target_id' => $trainee->id]);
+        $this->assertDatabaseHas('activity_logs', ['action' => 'Account status changed', 'target_id' => $trainee->id]);
     }
 
     public function test_number_allocation_rolls_back_and_does_not_reuse_consumed_numbers(): void

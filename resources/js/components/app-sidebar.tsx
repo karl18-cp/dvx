@@ -2,13 +2,19 @@ import { Form, usePage } from '@inertiajs/react';
 import {
     CalendarCheck,
     CalendarDays,
+    CalendarRange,
     ChevronDown,
     ClipboardCheck,
     ClipboardList,
     BookOpenCheck,
     FileText,
     FileSignature,
+    FileWarning,
+    FileSpreadsheet,
     Gavel,
+    Gamepad2,
+    HardDriveDownload,
+    HeartPulse,
     Inbox,
     Layers3,
     LayoutDashboard,
@@ -18,12 +24,15 @@ import {
     MessagesSquare,
     Presentation,
     ReceiptText,
+    ShieldCheck,
     ScrollText,
     Calculator,
     Settings,
     Trophy,
+    Target,
     UserCircle,
     UserRoundPlus,
+    UserRoundX,
     Users,
     UsersRound,
 } from 'lucide-react';
@@ -63,10 +72,13 @@ const primaryItems: MenuItem[] = [
     { label: 'Ranking', icon: Trophy, href: '/ranking' },
     { label: 'Attendance', icon: CalendarCheck, href: '/attendance' },
     { label: 'Requests', icon: Inbox, href: '/requests' },
+    { label: 'Document Requests', icon: FileText, href: '/document-requests' },
+    { label: 'My Contracts', icon: FileSignature, href: '/my-contracts' },
     { label: 'My Forms', icon: FileText, href: '/my-forms' },
     { label: 'Task Tracker', icon: ListChecks, href: '/task-tracker' },
     { label: 'EOD Report', icon: ClipboardCheck, href: '/eod-reports' },
     { label: 'DiverText', icon: MessagesSquare, href: '/divertext' },
+    { label: 'Mini-Games', icon: Gamepad2, href: '/mini-games' },
     {
         label: 'Training & Assessments',
         icon: BookOpenCheck,
@@ -76,6 +88,7 @@ const primaryItems: MenuItem[] = [
 ];
 
 const traineeItems: MenuItem[] = [
+    { label: 'My Contracts', icon: FileSignature, href: '/my-contracts' },
     {
         label: 'Training Plan & Allowance',
         icon: CalendarDays,
@@ -101,6 +114,9 @@ const agentItems: MenuItem[] = [
     { label: 'My Attendance', icon: CalendarCheck, href: '/my-attendance' },
     { label: 'My Requests', icon: Inbox, href: '/my-requests' },
     { label: 'Leave Requests', icon: CalendarCheck, href: '/leave-requests' },
+    { label: 'Leave Credits', icon: CalendarDays, href: '/leave-credits' },
+    { label: 'Document Requests', icon: FileText, href: '/document-requests' },
+    { label: 'My Contracts', icon: FileSignature, href: '/my-contracts' },
     { label: 'My Forms', icon: FileText, href: '/my-forms' },
     { label: 'My Records', icon: ClipboardCheck, href: '/my-records' },
     {
@@ -110,13 +126,40 @@ const agentItems: MenuItem[] = [
     },
     { label: 'My Coaching', icon: Presentation, href: '/my-coaching' },
     { label: 'DiverText', icon: MessagesSquare, href: '/divertext' },
+    { label: 'Mini-Games', icon: Gamepad2, href: '/mini-games' },
 ];
 
 const managementItems: MenuItem[] = [
     {
+        label: 'Roles & Permissions',
+        icon: ShieldCheck,
+        href: '/role-permissions',
+    },
+    { label: 'Audit Trail', icon: ShieldCheck, href: '/audit-trail' },
+    {
+        label: 'Backup & Recovery',
+        icon: HardDriveDownload,
+        href: '/backup-recovery',
+    },
+    {
+        label: 'Operations Health',
+        icon: HeartPulse,
+        href: '/operations-health',
+    },
+    {
         label: 'Applicants',
         icon: UserRoundPlus,
         href: '/management/applicants',
+    },
+    {
+        label: 'Interview Calendar',
+        icon: CalendarRange,
+        href: '/management/interview-calendar',
+    },
+    {
+        label: 'Document Expirations',
+        icon: FileWarning,
+        href: '/document-expirations',
     },
     {
         label: 'Campaign Schedules',
@@ -129,6 +172,11 @@ const managementItems: MenuItem[] = [
         label: 'Business Inquiries',
         icon: MessagesSquare,
         href: '/business-inquiries',
+    },
+    {
+        label: 'Public Page',
+        icon: Megaphone,
+        href: '/public-updates/manage',
     },
     { label: 'Team Assigning', icon: UserRoundPlus, href: '/team-assigning' },
     {
@@ -351,8 +399,23 @@ export function AppSidebar() {
     const [qualityOpen, setQualityOpen] = useState(true);
     const isQaAdmin = auth.user.role === 'qa_admin';
     const isAccounting = auth.user.role === 'accounting';
+    const permissions = new Set(auth.permissions ?? []);
+    const can = (permission: string) => permissions.has(permission);
     const isManager =
         isQaAdmin || auth.user.role === 'admin' || auth.user.role === 'manager';
+    const canUseManagement =
+        isManager ||
+        [
+            'employees.view',
+            'trainees.manage',
+            'sanctions.manage',
+            'schedules.manage',
+            'audit.view',
+            'backups.manage',
+            'operations.view',
+            'compliance_documents.manage',
+            'recruitment.manage',
+        ].some(can);
     const isQaViewer = isManager || auth.user.role === 'team_leader';
 
     return (
@@ -390,7 +453,7 @@ export function AppSidebar() {
         >
             <SidebarHeader className="h-32 items-center justify-center border-b border-white/10 bg-[#171326]">
                 <Link
-                    href={dashboard()}
+                    href={isAccounting ? '/accounting/dashboard' : dashboard()}
                     aria-label="Divertex dashboard"
                     className="flex w-44 max-w-full items-center justify-center rounded-xl p-2 transition group-data-[collapsible=icon]:w-12 group-data-[collapsible=icon]:p-0 hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-400"
                 >
@@ -409,6 +472,48 @@ export function AppSidebar() {
                                 label: 'My Payslips',
                                 icon: ReceiptText,
                                 href: '/my-payslips',
+                            }}
+                            currentUrl={
+                                (
+                                    page.props.navigation?.currentPath ??
+                                    page.url
+                                ).split('?')[0]
+                            }
+                        />
+                    )}
+                    <SidebarItem
+                        item={{
+                            label: 'Performance',
+                            icon: Target,
+                            href: '/performance',
+                        }}
+                        currentUrl={
+                            (
+                                page.props.navigation?.currentPath ?? page.url
+                            ).split('?')[0]
+                        }
+                    />
+                    {isAccounting && can('attendance.view') && (
+                        <SidebarItem
+                            item={{
+                                label: 'Dashboard',
+                                icon: LayoutDashboard,
+                                href: '/accounting/dashboard',
+                            }}
+                            currentUrl={
+                                (
+                                    page.props.navigation?.currentPath ??
+                                    page.url
+                                ).split('?')[0]
+                            }
+                        />
+                    )}
+                    {isAccounting && (
+                        <SidebarItem
+                            item={{
+                                label: 'Leave Credits',
+                                icon: CalendarDays,
+                                href: '/leave-credits',
                             }}
                             currentUrl={
                                 (
@@ -442,6 +547,7 @@ export function AppSidebar() {
                                     icon: [
                                         ReceiptText,
                                         CalendarDays,
+                                        UsersRound,
                                         ClipboardList,
                                         UserCircle,
                                         FileSignature,
@@ -450,6 +556,7 @@ export function AppSidebar() {
                                         Layers3,
                                         ScrollText,
                                         Calculator,
+                                        FileSpreadsheet,
                                     ][index],
                                     href: accountingSectionUrl(section.slug),
                                 }}
@@ -468,7 +575,7 @@ export function AppSidebar() {
                                 }
                             />
                         ))}
-                    {auth.user.role === 'admin' && (
+                    {can('salaries.view') && !isAccounting && (
                         <SidebarItem
                             item={{
                                 label: 'Accounting',
@@ -483,14 +590,58 @@ export function AppSidebar() {
                             }
                         />
                     )}
-                    {['admin', 'qa_admin', 'team_leader'].includes(
-                        auth.user.role,
-                    ) && (
+                    {can('account_status.manage') && (
                         <SidebarItem
                             item={{
                                 label: 'Employee Status',
                                 icon: Users,
                                 href: '/account-statuses',
+                            }}
+                            currentUrl={
+                                (
+                                    page.props.navigation?.currentPath ??
+                                    page.url
+                                ).split('?')[0]
+                            }
+                        />
+                    )}
+                    {can('offboarding.manage') && (
+                        <SidebarItem
+                            item={{
+                                label: 'Employee Clearance',
+                                icon: UserRoundX,
+                                href: '/offboarding',
+                            }}
+                            currentUrl={
+                                (
+                                    page.props.navigation?.currentPath ??
+                                    page.url
+                                ).split('?')[0]
+                            }
+                        />
+                    )}
+                    {can('documents.manage') &&
+                        !['admin', 'team_leader'].includes(auth.user.role) && (
+                            <SidebarItem
+                                item={{
+                                    label: 'Document Requests',
+                                    icon: FileText,
+                                    href: '/document-requests',
+                                }}
+                                currentUrl={
+                                    (
+                                        page.props.navigation?.currentPath ??
+                                        page.url
+                                    ).split('?')[0]
+                                }
+                            />
+                        )}
+                    {['admin', 'team_leader'].includes(auth.user.role) && (
+                        <SidebarItem
+                            item={{
+                                label: 'Leave Credits',
+                                icon: CalendarDays,
+                                href: '/leave-credits',
                             }}
                             currentUrl={
                                 (
@@ -540,12 +691,14 @@ export function AppSidebar() {
                     )
                         .filter(
                             (item) =>
-                                !['Task Tracker', 'EOD Report'].includes(
+                                (item.label !== 'Mini-Games' ||
+                                    auth.user.role === 'team_leader') &&
+                                (!['Task Tracker', 'EOD Report'].includes(
                                     item.label,
                                 ) ||
-                                ['admin', 'team_leader'].includes(
-                                    auth.user.role,
-                                ),
+                                    ['admin', 'team_leader'].includes(
+                                        auth.user.role,
+                                    )),
                         )
                         .map((item) => (
                             <SidebarItem
@@ -582,27 +735,59 @@ export function AppSidebar() {
                             />
                         ))}
 
-                    {isManager && (
+                    {canUseManagement && (
                         <>
-                            {!isQaAdmin && (
+                            <SidebarGroup
+                                label="Management"
+                                icon={Layers3}
+                                items={managementItems.filter((item) => {
+                                    const required: Record<string, string> = {
+                                        '/audit-trail': 'audit.view',
+                                        '/backup-recovery': 'backups.manage',
+                                        '/operations-health': 'operations.view',
+                                        '/document-expirations':
+                                            'compliance_documents.manage',
+                                        '/management/interview-calendar':
+                                            'recruitment.manage',
+                                        '/campaign-schedules':
+                                            'schedules.manage',
+                                        '/employees': 'employees.view',
+                                        '/trainees': 'trainees.manage',
+                                        '/teams': 'schedules.manage',
+                                        '/campaigns': 'schedules.manage',
+                                        '/sanctions': 'sanctions.manage',
+                                    };
+                                    if (item.href && required[item.href]) {
+                                        return can(required[item.href]);
+                                    }
+                                    return auth.user.role === 'admin';
+                                })}
+                                open={managementOpen}
+                                onToggle={() =>
+                                    setManagementOpen((value) => !value)
+                                }
+                                currentUrl={
+                                    (
+                                        page.props.navigation?.currentPath ??
+                                        page.url
+                                    ).split('?')[0]
+                                }
+                            />
+                            {isManager && (
                                 <SidebarGroup
-                                    label="Management"
-                                    icon={Layers3}
-                                    items={managementItems.filter(
+                                    label="Training & Development"
+                                    icon={BookOpenCheck}
+                                    items={trainingItems.filter(
                                         (item) =>
                                             ![
-                                                '/trainees',
-                                                '/business-inquiries',
-                                                '/public-form-settings',
-                                                '/sanctions',
-                                                '/forms',
-                                                '/satisfaction-results',
-                                            ].includes(item.href ?? '') ||
-                                            auth.user.role === 'admin',
+                                                '/management/training-plans',
+                                                '/management/applicant-exams',
+                                            ].includes(item.href as string) ||
+                                            can('training.manage'),
                                     )}
-                                    open={managementOpen}
+                                    open={trainingOpen}
                                     onToggle={() =>
-                                        setManagementOpen((value) => !value)
+                                        setTrainingOpen((value) => !value)
                                     }
                                     currentUrl={
                                         (
@@ -612,30 +797,6 @@ export function AppSidebar() {
                                     }
                                 />
                             )}
-                            <SidebarGroup
-                                label="Training & Development"
-                                icon={BookOpenCheck}
-                                items={trainingItems.filter(
-                                    (item) =>
-                                        ![
-                                            '/management/training-plans',
-                                            '/management/applicant-exams',
-                                        ].includes(item.href as string) ||
-                                        ['admin', 'qa_admin'].includes(
-                                            auth.user.role,
-                                        ),
-                                )}
-                                open={trainingOpen}
-                                onToggle={() =>
-                                    setTrainingOpen((value) => !value)
-                                }
-                                currentUrl={
-                                    (
-                                        page.props.navigation?.currentPath ??
-                                        page.url
-                                    ).split('?')[0]
-                                }
-                            />
                         </>
                     )}
                     {isQaViewer && (

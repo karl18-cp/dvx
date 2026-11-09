@@ -18,13 +18,16 @@ class BusinessInquiryTest extends TestCase
     {
         return ['submission_id' => (string) Str::uuid(), 'name' => 'Client Tester', 'company' => 'Test Company', 'email' => 'client@example.test', 'phone' => '+1 555 1234', 'service' => 'Customer Support', 'message' => 'We need a support team.', 'meeting_time' => now('America/New_York')->addDays(3)->format('Y-m-d\TH:i'), 'timezone' => 'America/New_York'];
     }
+
     private function configureMail(): void
     {
         config(['mail.default' => 'smtp', 'mail.mailers.smtp.host' => 'example.test', 'mail.mailers.smtp.username' => 'test', 'mail.mailers.smtp.password' => 'test', 'recruitment.inbox' => 'divertexcorp@gmail.com']);
     }
+
     public function test_public_submission_is_saved_emailed_and_not_duplicated(): void
     {
-        Mail::fake(); $this->configureMail();
+        Mail::fake();
+        $this->configureMail();
         $data = $this->payload();
         $this->from('/careers')->post('/business-inquiries', [...$data, 'status' => 'closed', 'admin_notes' => 'injected'])->assertRedirect('/careers')->assertSessionHasNoErrors();
         $record = BusinessInquiry::firstOrFail();
@@ -36,6 +39,7 @@ class BusinessInquiryTest extends TestCase
         $this->assertDatabaseCount('business_inquiries', 1);
         Mail::assertSentCount(1);
     }
+
     public function test_invalid_meeting_or_timezone_is_rejected(): void
     {
         Mail::fake();
@@ -44,6 +48,7 @@ class BusinessInquiryTest extends TestCase
         $this->assertDatabaseCount('business_inquiries', 0);
         Mail::assertNothingSent();
     }
+
     public function test_failed_email_keeps_inquiry_and_admin_can_retry(): void
     {
         $this->configureMail();
@@ -57,6 +62,7 @@ class BusinessInquiryTest extends TestCase
         $this->assertSame('sent', $record->fresh()->email_status);
         Mail::assertSentCount(1);
     }
+
     public function test_only_admin_can_view_and_update_inquiries(): void
     {
         Mail::fake();
@@ -64,7 +70,11 @@ class BusinessInquiryTest extends TestCase
         $record = BusinessInquiry::firstOrFail();
         $this->get('/business-inquiries')->assertRedirect('/login');
         foreach (['manager', 'qa_admin', 'team_leader', 'agent', 'trainee'] as $role) {
-            $this->actingAs(User::factory()->create(['role' => $role, 'status' => 'active']));
+            $this->actingAs(User::factory()->create([
+                'role' => $role,
+                'status' => 'active',
+                'training_status' => $role === 'trainee' ? 'in_training' : null,
+            ]));
             $this->get('/business-inquiries')->assertForbidden();
             $this->patch('/business-inquiries/'.$record->id, ['status' => 'closed'])->assertForbidden();
             $this->post('/business-inquiries/'.$record->id.'/email')->assertForbidden();

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AccountingDocument;
 use App\Models\User;
 use App\Services\AccountingService;
+use App\Services\AuditLogService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -66,7 +67,7 @@ class AccountingDocumentController extends Controller
 
     public function store(Request $request, AccountingService $service)
     {
-        $service->authorize($request->user());
+        $service->authorizeFinance($request->user());
         $data = $request->validate([
             'record_type' => ['required', Rule::in(['invoices', 'receivable', 'payable'])],
             'request_key' => ['required', 'uuid'], 'direction' => ['required', Rule::in(['receivable', 'payable'])],
@@ -123,7 +124,7 @@ class AccountingDocumentController extends Controller
 
     public function payment(Request $request, AccountingDocument $document, AccountingService $service)
     {
-        $service->authorize($request->user());
+        $service->authorizeFinance($request->user());
         $data = $request->validate(['request_key' => ['required', 'uuid'], 'amount' => ['required', 'string', 'regex:/^\d{1,7}(\.\d{1,2})?$/'], 'payment_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:'.now('Asia/Manila')->toDateString()], 'method' => ['required', Rule::in(['bank_transfer', 'cash', 'check', 'e_wallet'])], 'reference' => ['required', 'string', 'max:150']]);
         $amount = $service->money($data['amount']);
         unset($data['amount']);
@@ -151,7 +152,7 @@ class AccountingDocumentController extends Controller
 
     public function void(Request $request, AccountingDocument $document, AccountingService $service)
     {
-        $service->authorize($request->user());
+        $service->authorizeFinance($request->user());
         $data = $request->validate(['void_reason' => ['required', 'string', 'min:5', 'max:2000']]);
         DB::transaction(function () use ($request, $document, $data) {
             $document = AccountingDocument::whereKey($document->id)->lockForUpdate()->firstOrFail();
@@ -175,6 +176,6 @@ class AccountingDocumentController extends Controller
 
     private function audit(Request $request, AccountingDocument $document, string $action, array $metadata): void
     {
-        DB::table('assessment_activity_logs')->insert(['actor_id' => $request->user()->id, 'action' => $action, 'target_type' => AccountingDocument::class, 'target_id' => $document->id, 'metadata' => json_encode($metadata, JSON_THROW_ON_ERROR), 'created_at' => now()]);
+        app(AuditLogService::class)->record($request->user(), 'payroll', $action, $document, metadata: $metadata);
     }
 }

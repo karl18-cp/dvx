@@ -25,6 +25,25 @@
     overflow: hidden;
 }
 
+@keyframes dvx-loading-slide {
+    0% {
+        transform: translateX(-110%);
+    }
+    100% {
+        transform: translateX(210%);
+    }
+}
+
+.dvx-loading-bar {
+    animation: dvx-loading-slide 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dvx-loading-bar {
+        animation-duration: 2.4s;
+    }
+}
+
 @theme {
     --font-sans:
         'Manrope Variable', 'Manrope', ui-sans-serif, system-ui, sans-serif,
@@ -161,6 +180,14 @@
 }
 
 @layer components {
+    .input {
+        @apply h-12 w-full rounded-xl border border-slate-300 bg-white px-3 font-normal transition outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100;
+    }
+
+    .eyebrow {
+        @apply text-[11px] font-bold tracking-wide text-slate-400 uppercase;
+    }
+
     /* Compact Assessment admin workspace typography. Keep this centralized so
        management, assignments, builder, grading, and analytics stay aligned. */
     .assessment-admin {

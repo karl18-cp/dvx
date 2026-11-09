@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\SaveCampaignScheduleRequest;
 use App\Models\CampaignSchedule;
 use App\Models\User;
+use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -46,6 +47,7 @@ class CampaignScheduleController extends Controller
         DB::transaction(function () use ($request): void {
             $schedule = CampaignSchedule::query()->create(['name' => $request->validated('name'), 'created_by' => $request->user()->id]);
             $schedule->days()->createMany($request->scheduleDays());
+            app(AuditLogService::class)->record($request->user(), 'scheduling', 'Campaign schedule created', $schedule, metadata: ['after' => $schedule->load('days')->toArray()]);
         });
 
         return to_route('campaign-schedules', ['tab' => 'view'])->with('status', 'Schedule created.');
@@ -55,9 +57,11 @@ class CampaignScheduleController extends Controller
     {
         DB::transaction(function () use ($request, $schedule): void {
             $schedule = CampaignSchedule::query()->lockForUpdate()->findOrFail($schedule->id);
+            $before = $schedule->load('days')->toArray();
             $schedule->update(['name' => $request->validated('name')]);
             $schedule->days()->delete();
             $schedule->days()->createMany($request->scheduleDays());
+            app(AuditLogService::class)->record($request->user(), 'scheduling', 'Campaign schedule updated', $schedule, metadata: ['before' => $before, 'after' => $schedule->fresh()->load('days')->toArray()]);
         });
 
         return to_route('campaign-schedules', ['tab' => 'view'])->with('status', 'Schedule updated for all assigned employees.');
@@ -70,11 +74,13 @@ class CampaignScheduleController extends Controller
             'employee_ids' => ['present', 'array'],
             'employee_ids.*' => ['integer', 'distinct', Rule::exists('users', 'id')->where(fn ($q) => $q->where('status', 'active')->orWhere('campaign_schedule_id', $schedule->id))],
         ]);
-        DB::transaction(function () use ($schedule, $data): void {
+        DB::transaction(function () use ($request, $schedule, $data): void {
             CampaignSchedule::query()->lockForUpdate()->findOrFail($schedule->id);
+            $before = User::query()->where('campaign_schedule_id', $schedule->id)->pluck('id')->all();
             User::query()->where(fn ($q) => $q->where('campaign_schedule_id', $schedule->id)->orWhereIn('id', $data['employee_ids']))->orderBy('id')->lockForUpdate()->get(['id']);
             User::query()->where('campaign_schedule_id', $schedule->id)->whereNotIn('id', $data['employee_ids'])->update(['campaign_schedule_id' => null]);
             User::query()->whereIn('id', $data['employee_ids'])->update(['campaign_schedule_id' => $schedule->id]);
+            app(AuditLogService::class)->record($request->user(), 'scheduling', 'Campaign schedule assignments updated', $schedule, metadata: ['before_employee_ids' => $before, 'after_employee_ids' => $data['employee_ids']]);
         }, attempts: 3);
 
         return to_route('campaign-schedules', ['tab' => 'view'])->with('status', 'Employee assignments saved.');
@@ -83,6 +89,8 @@ class CampaignScheduleController extends Controller
     public function destroy(Request $request, CampaignSchedule $schedule): RedirectResponse
     {
         $this->authorizeManager($request);
+        $before = $schedule->load('days')->toArray();
+        app(AuditLogService::class)->record($request->user(), 'scheduling', 'Campaign schedule deleted', $schedule, metadata: ['before' => $before]);
         $schedule->delete();
 
         return to_route('campaign-schedules', ['tab' => 'view'])->with('status', 'Schedule deleted. Its employee assignments were removed.');
@@ -90,6 +98,6 @@ class CampaignScheduleController extends Controller
 
     private function authorizeManager(Request $request): void
     {
-        abort_unless(in_array($request->user()?->role, ['admin', 'manager'], true), 403);
+        abort_unless(app(\App\Services\RolePermissionService::class)->can($request->user(), 'schedules.manage'), 403);
     }
 }

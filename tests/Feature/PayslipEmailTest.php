@@ -77,8 +77,8 @@ class PayslipEmailTest extends TestCase
                 && str_starts_with($mail->filename, 'Divertex-Payslip-')
                 && count($mail->attachments()) === 1;
         });
-        $this->assertDatabaseCount('assessment_activity_logs', 2);
-        $this->assertDatabaseHas('assessment_activity_logs', [
+        $this->assertDatabaseCount('activity_logs', 2);
+        $this->assertDatabaseHas('activity_logs', [
             'target_id' => $entry->id,
             'action' => 'Payroll payslip emailed',
         ]);

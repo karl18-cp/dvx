@@ -5,11 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\EmployeeContract;
 use App\Models\User;
 use App\Services\AccountingService;
+use App\Services\AuditLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -17,7 +19,7 @@ use Throwable;
 
 class EmployeeContractController extends Controller
 {
-    private const TYPES = ['training', 'employment'];
+    private const TYPES = ['training', 'employment', 'quitclaim'];
 
     private const STATUSES = ['draft', 'active', 'expired', 'terminated', 'superseded'];
 
@@ -30,7 +32,7 @@ class EmployeeContractController extends Controller
             'status' => ['nullable', Rule::in([...self::STATUSES, 'archived'])],
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
-        $query = EmployeeContract::with(['employee:id,name,username,role,status', 'creator:id,name'])
+        $query = EmployeeContract::with(['employee:id,name,username,role,status', 'creator:id,name', 'signature:id,employee_contract_id,signer_name,signed_at,signature_hash'])
             ->when($filters['search'] ?? null, fn ($q, $value) => $q->where(fn ($match) => $match
                 ->where('title', 'like', '%'.$value.'%')
                 ->orWhere('reference_number', 'like', '%'.$value.'%')
@@ -47,6 +49,7 @@ class EmployeeContractController extends Controller
             'summary' => [
                 'training' => EmployeeContract::whereNull('archived_at')->where('contract_type', 'training')->count(),
                 'employment' => EmployeeContract::whereNull('archived_at')->where('contract_type', 'employment')->count(),
+                'quitclaim' => EmployeeContract::whereNull('archived_at')->where('contract_type', 'quitclaim')->count(),
                 'active' => EmployeeContract::whereNull('archived_at')->where('status', 'active')->count(),
                 'archived' => EmployeeContract::whereNotNull('archived_at')->count(),
             ],
@@ -55,7 +58,7 @@ class EmployeeContractController extends Controller
 
     public function store(Request $request, AccountingService $service): RedirectResponse
     {
-        $service->authorize($request->user());
+        $service->authorizeFinance($request->user());
         $data = $request->validate($this->rules(true));
         $employee = User::whereKey($data['user_id'])->whereNotNull('username')->firstOrFail();
         $storedPath = null;
@@ -73,6 +76,10 @@ class EmployeeContractController extends Controller
                 }
                 $contract = EmployeeContract::create([
                     ...$this->attributes($data),
+                    'version_group' => (string) Str::uuid(),
+                    'version' => 1,
+                    'document_sha256' => hash_file('sha256', Storage::disk('local')->path($storedPath)),
+                    'signing_status' => 'draft',
                     'file_disk' => 'local',
                     'file_path' => $storedPath,
                     'original_filename' => $this->filename($file->getClientOriginalName()),
@@ -96,13 +103,13 @@ class EmployeeContractController extends Controller
     {
         $service->authorize($request->user());
 
-        return response()->json($contract->load(['employee:id,name,username,role,status', 'creator:id,name', 'updater:id,name']))
+        return response()->json($contract->load(['employee:id,name,username,role,status', 'creator:id,name', 'updater:id,name', 'signature']))
             ->header('Cache-Control', 'private, no-store');
     }
 
     public function update(Request $request, EmployeeContract $contract, AccountingService $service): RedirectResponse
     {
-        $service->authorize($request->user());
+        $service->authorizeFinance($request->user());
         $data = $request->validate($this->rules(false));
         User::whereKey($data['user_id'])->whereNotNull('username')->firstOrFail();
         $newPath = null;
@@ -121,6 +128,9 @@ class EmployeeContractController extends Controller
                 if ($contract->archived_at) {
                     throw ValidationException::withMessages(['contract' => 'Archived contracts are read-only.']);
                 }
+                if ($contract->signing_status !== 'draft') {
+                    throw ValidationException::withMessages(['contract' => 'Issued or signed contract versions are immutable. Create a new version instead.']);
+                }
                 $attributes = [...$this->attributes($data), 'updated_by' => $request->user()->id];
                 if ($file) {
                     $oldFile = [$contract->file_disk, $contract->file_path];
@@ -130,6 +140,7 @@ class EmployeeContractController extends Controller
                         'original_filename' => $this->filename($file->getClientOriginalName()),
                         'mime_type' => $file->getMimeType() ?: 'application/octet-stream',
                         'file_size' => $file->getSize(),
+                        'document_sha256' => hash_file('sha256', Storage::disk('local')->path($newPath)),
                     ];
                 }
                 $contract->update($attributes);
@@ -150,12 +161,15 @@ class EmployeeContractController extends Controller
 
     public function archive(Request $request, EmployeeContract $contract, AccountingService $service): RedirectResponse
     {
-        $service->authorize($request->user());
+        $service->authorizeFinance($request->user());
         $data = $request->validate(['archive_reason' => ['required', 'string', 'min:5', 'max:2000']]);
         DB::transaction(function () use ($request, $contract, $data) {
             $contract = EmployeeContract::whereKey($contract->id)->lockForUpdate()->firstOrFail();
             if ($contract->archived_at) {
                 throw ValidationException::withMessages(['archive_reason' => 'This contract is already archived.']);
+            }
+            if (in_array($contract->signing_status, ['issued', 'signed'], true)) {
+                throw ValidationException::withMessages(['archive_reason' => 'Issued and signed contract versions must remain available.']);
             }
             $contract->update([...$data, 'archived_at' => now(), 'archived_by' => $request->user()->id]);
             $this->audit($request, $contract, 'Employee contract archived');
@@ -209,13 +223,6 @@ class EmployeeContractController extends Controller
 
     private function audit(Request $request, EmployeeContract $contract, string $action): void
     {
-        DB::table('assessment_activity_logs')->insert([
-            'actor_id' => $request->user()->id,
-            'action' => $action,
-            'target_type' => EmployeeContract::class,
-            'target_id' => $contract->id,
-            'metadata' => json_encode(['employee_id' => $contract->user_id, 'contract_type' => $contract->contract_type, 'status' => $contract->status], JSON_THROW_ON_ERROR),
-            'created_at' => now(),
-        ]);
+        app(AuditLogService::class)->record($request->user(), 'contracts', $action, $contract, metadata: ['employee_id' => $contract->user_id, 'contract_type' => $contract->contract_type, 'status' => $contract->status], subjectId: $contract->user_id);
     }
 }

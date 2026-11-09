@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\RolePermissionService;
 use Closure;
 use Illuminate\Http\Request;
 
@@ -16,6 +17,9 @@ class RestrictQaAdminAccess
             return $next($request);
         }
         abort_unless($request->user()->status === 'active', 403);
+        if (app(RolePermissionService::class)->allowsRestrictedPath($request->user(), $request)) {
+            return $next($request);
+        }
         if ($request->is('dashboard')) {
             return redirect('/management/qa-dashboard');
         }
@@ -28,7 +32,7 @@ class RestrictQaAdminAccess
             'assessment-reviews', 'assessment-results', 'assessment-results-export', 'assessment-teams',
             'training-library', 'campaign-analytics', 'coaching', 'qa-dashboard', 'call-evaluations', 'qa-scorecards',
         ];
-        $allowed = ['my-payslips', 'my-payslips/*', 'account-statuses', 'account-statuses/*', 'settings', 'settings/*', 'user/*', 'users/*/photo', 'notification-feed', 'notification-feed/*', 'management/employees/*/training-profile'];
+        $allowed = ['daily-brief', 'daily-brief/*', 'my-payslips', 'my-payslips/*', 'performance', 'performance/*', 'account-statuses', 'account-statuses/*', 'settings', 'settings/*', 'user/*', 'users/*/photo', 'notification-feed', 'notification-feed/*', 'management/employees/*/training-profile'];
         foreach ($modules as $module) {
             $allowed[] = 'management/'.$module;
             $allowed[] = 'management/'.$module.'/*';

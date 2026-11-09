@@ -69,6 +69,6 @@ class CampaignController extends Controller
 
     private function authorizeAdmin(Request $request): void
     {
-        abort_unless(in_array($request->user()?->role, ['admin', 'manager'], true), 403);
+        abort_unless(app(\App\Services\RolePermissionService::class)->can($request->user(), 'schedules.manage'), 403);
     }
 }

@@ -21,7 +21,7 @@ class AccountingEntry extends Model
 
     protected function casts(): array
     {
-        return ['period_start' => 'date', 'period_end' => 'date', 'gross_cents' => 'integer', 'deduction_cents' => 'integer', 'net_cents' => 'integer', 'source_snapshot' => 'array', 'approved_at' => 'datetime', 'paid_at' => 'datetime', 'voided_at' => 'datetime'];
+        return ['period_start' => 'date', 'period_end' => 'date', 'gross_cents' => 'integer', 'deduction_cents' => 'integer', 'net_cents' => 'integer', 'source_snapshot' => 'array', 'submitted_at' => 'datetime', 'approved_at' => 'datetime', 'locked_at' => 'datetime', 'paid_at' => 'datetime', 'voided_at' => 'datetime'];
     }
 
     public function employee(): BelongsTo
@@ -37,6 +37,21 @@ class AccountingEntry extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function submitter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
+    }
+
+    public function locker(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'locked_by');
+    }
+
+    public function parentEntry(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_entry_id');
     }
 
     public function payer(): BelongsTo

@@ -15,18 +15,24 @@ import { useState } from 'react';
 import ApplicantExam from '@/components/applicant-exam';
 import type { ExamConfig } from '@/components/applicant-exam';
 import BusinessInquiryDialog from '@/components/business-inquiry-dialog';
+import DailyBrief from '@/components/daily-brief';
+import LandingAssistant from '@/components/landing-assistant';
 import { PublicFormFields } from '@/components/public-form-fields';
 import type { PublicFormDefinition } from '@/components/public-form-fields';
+import PublicUpdatesFeed from '@/components/public-updates-feed';
+import type { PublicUpdate } from '@/components/public-updates-feed';
 
 export default function Welcome({
     publicForms,
     applicantExam,
+    publicUpdates,
 }: {
     applicantExam: ExamConfig;
     publicForms: {
         application: PublicFormDefinition;
         business: PublicFormDefinition;
     };
+    publicUpdates: PublicUpdate[];
 }) {
     const [inquiryOpen, setInquiryOpen] = useState(false);
     const { auth } = usePage().props;
@@ -143,6 +149,7 @@ export default function Welcome({
                     <nav className="hidden items-center gap-7 text-sm font-semibold xl:flex">
                         <a href="#about">About</a>
                         <a href="#services">Services</a>
+                        <a href="#updates">Updates</a>
                         <a href="#contact">Partner With Us</a>
                         <a href="#careers">Careers</a>
                         <a href="/applicant-portal">Applicant Portal</a>
@@ -269,6 +276,7 @@ export default function Welcome({
                         </div>
                     </div>
                 </section>
+                <DailyBrief variant="landing" />
                 <section
                     id="about"
                     className="mx-auto max-w-7xl px-5 py-24 lg:px-8"
@@ -472,6 +480,7 @@ export default function Welcome({
                         </div>
                     </div>
                 </section>
+                <PublicUpdatesFeed updates={publicUpdates} />
                 <section
                     id="careers"
                     className="mx-auto max-w-7xl px-5 py-24 lg:px-8"
@@ -733,6 +742,10 @@ export default function Welcome({
                     onClose={() => setInquiryOpen(false)}
                 />
             )}
+            <LandingAssistant
+                updates={publicUpdates}
+                onBusinessInquiry={() => setInquiryOpen(true)}
+            />
             <footer className="border-t border-white/10 bg-[#100d16] px-5 py-8 text-center text-sm text-white/45">
                 <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-5 text-left">
                     <p>
@@ -742,6 +755,9 @@ export default function Welcome({
                     <div className="flex flex-wrap gap-5">
                         <a href="#services" className="hover:text-white">
                             Services
+                        </a>
+                        <a href="#updates" className="hover:text-white">
+                            Updates
                         </a>
                         <a href="#contact" className="hover:text-white">
                             Business inquiries

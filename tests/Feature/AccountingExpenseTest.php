@@ -65,7 +65,7 @@ class AccountingExpenseTest extends TestCase
         $this->patch('/accounting/expense-categories/'.$id, ['name' => 'Office Utilities'])->assertSessionHasNoErrors();
         $this->assertDatabaseHas('expense_categories', ['id' => $id, 'name' => 'Office Utilities']);
         $this->assertSame($id, AccountingExpense::sole()->category_id);
-        $this->assertDatabaseHas('assessment_activity_logs', ['action' => 'Expense category saved']);
+        $this->assertDatabaseHas('activity_logs', ['action' => 'Expense category saved']);
     }
 
     public function test_expenses_use_exact_amounts_and_filters_group_totals_without_duplicate_submissions(): void
@@ -99,6 +99,6 @@ class AccountingExpenseTest extends TestCase
         $this->patch($url, ['void_reason' => 'Entered wrong amount'])->assertSessionHasNoErrors();
         $this->getJson('/accounting/expenses')->assertJsonPath('filtered_total_cents', 0)->assertJsonPath('expenses.total', 1)->assertJsonPath('expenses.data.0.void_reason', 'Entered wrong amount');
         $this->patch($url, ['void_reason' => 'Try again'])->assertSessionHasErrors('void_reason');
-        $this->assertDatabaseHas('assessment_activity_logs', ['action' => 'Expense voided', 'target_id' => $entry->id]);
+        $this->assertDatabaseHas('activity_logs', ['action' => 'Expense voided', 'target_id' => $entry->id]);
     }
 }

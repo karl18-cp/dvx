@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Services\RolePermissionService;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -43,6 +44,11 @@ class User extends Authenticatable implements PasskeyUser
         return $this->status === 'active' && ($this->role !== 'trainee' || in_array($this->training_status, ['in_training', 'graduated'], true));
     }
 
+    public function hasPermission(string $permission): bool
+    {
+        return app(RolePermissionService::class)->can($this, $permission);
+    }
+
     public function employeeAccount(): HasOne
     {
         return $this->hasOne(self::class, 'source_trainee_id');
@@ -70,6 +76,11 @@ class User extends Authenticatable implements PasskeyUser
     public function personalInformation(): HasOne
     {
         return $this->hasOne(PersonalInformation::class);
+    }
+
+    public function governmentDetails(): HasOne
+    {
+        return $this->hasOne(EmployeeGovernmentDetail::class);
     }
 
     /**
@@ -102,6 +113,22 @@ class User extends Authenticatable implements PasskeyUser
     public function leaveRequests(): HasMany
     {
         return $this->hasMany(LeaveRequest::class);
+    }
+
+    /** @return HasMany<LeaveCreditTransaction, $this> */
+    public function leaveCreditTransactions(): HasMany
+    {
+        return $this->hasMany(LeaveCreditTransaction::class);
+    }
+
+    public function clearance(): HasOne
+    {
+        return $this->hasOne(EmployeeClearance::class);
+    }
+
+    public function documentRequests(): HasMany
+    {
+        return $this->hasMany(EmployeeDocumentRequest::class);
     }
 
     public function teamMembership(): HasOne

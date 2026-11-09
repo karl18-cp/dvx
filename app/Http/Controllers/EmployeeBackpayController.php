@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\EmployeeBackpay;
+use App\Services\AuditLogService;
 use App\Models\User;
 use App\Services\AccountingService;
 use App\Services\ThirteenthMonthService;
@@ -57,7 +58,7 @@ class EmployeeBackpayController extends Controller
 
     public function store(Request $request, AccountingService $accounting, ThirteenthMonthService $service): RedirectResponse
     {
-        $accounting->authorize($request->user());
+        $accounting->authorizeFinance($request->user());
         $data = $request->validate($this->rules(true));
         $employee = User::whereKey($data['user_id'])->whereIn('status', ['resigned', 'terminated'])->firstOrFail();
 
@@ -73,7 +74,7 @@ class EmployeeBackpayController extends Controller
 
     public function update(Request $request, EmployeeBackpay $backpay, AccountingService $accounting, ThirteenthMonthService $service): RedirectResponse
     {
-        $accounting->authorize($request->user());
+        $accounting->authorizeFinance($request->user());
         $data = $request->validate($this->rules(false));
         DB::transaction(function () use ($request, $accounting, $service, $backpay, $data) {
             $backpay = EmployeeBackpay::whereKey($backpay->id)->lockForUpdate()->firstOrFail();
@@ -139,13 +140,6 @@ class EmployeeBackpayController extends Controller
             ],
             'updated_by' => $request->user()->id,
         ])->save();
-        DB::table('assessment_activity_logs')->insert([
-            'actor_id' => $request->user()->id,
-            'action' => $creating ? 'Employee backpay prepared' : 'Employee backpay updated',
-            'target_type' => EmployeeBackpay::class,
-            'target_id' => $backpay->id,
-            'metadata' => json_encode(['employee_id' => $employee->id, 'status' => $backpay->status, 'total_cents' => $backpay->total_cents], JSON_THROW_ON_ERROR),
-            'created_at' => now(),
-        ]);
+        app(AuditLogService::class)->record($request->user(), 'payroll', $creating ? 'Employee backpay prepared' : 'Employee backpay updated', $backpay, metadata: ['employee_id' => $employee->id, 'status' => $backpay->status, 'total_cents' => $backpay->total_cents], subjectId: $employee->id);
     }
 }

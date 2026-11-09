@@ -16,6 +16,7 @@ import {
     RefreshCw,
     Search,
     Send,
+    UserRoundCog,
     Users,
     X,
 } from 'lucide-react';
@@ -27,11 +28,12 @@ import '../../css/divertext.css';
 
 export type Room = {
     id: number;
-    type: 'direct' | 'team';
+    type: 'direct' | 'team' | 'group';
     name: string;
     subtitle: string;
     avatar: string;
     can_send: boolean;
+    can_manage_members: boolean;
     unread_count: number;
     latest_message: {
         body: string;
@@ -55,6 +57,7 @@ type Person = {
     avatar: string;
 };
 type MessagePage = { room: Room; messages: Message[]; has_more: boolean };
+type MemberPage = { creator_id: number; members: Person[] };
 const initials = (name: string) =>
     name
         .split(' ')
@@ -116,6 +119,14 @@ export default function DiverText({
     const [peopleLoading, setPeopleLoading] = useState(false);
     const [peopleError, setPeopleError] = useState('');
     const [starting, setStarting] = useState(false);
+    const [groupOpen, setGroupOpen] = useState(false);
+    const [groupName, setGroupName] = useState('');
+    const [groupMembers, setGroupMembers] = useState<number[]>([]);
+    const [manageOpen, setManageOpen] = useState(false);
+    const [manageMembers, setManageMembers] = useState<number[]>([]);
+    const [existingMembers, setExistingMembers] = useState<Person[]>([]);
+    const [manageLoading, setManageLoading] = useState(false);
+    const [manageSaving, setManageSaving] = useState(false);
     const active = useRef<number | null>(null);
     const loaded = useRef<Message[]>([]);
     const scroller = useRef<HTMLDivElement>(null);
@@ -367,7 +378,7 @@ export default function DiverText({
     }, [roomId, fetchMessages]);
 
     useEffect(() => {
-        if (!newOpen) {
+        if (!newOpen && !groupOpen && !manageOpen) {
             return;
         }
 
@@ -406,7 +417,7 @@ export default function DiverText({
             window.clearTimeout(timer);
             controller.abort();
         };
-    }, [newOpen, peopleSearch]);
+    }, [newOpen, groupOpen, manageOpen, peopleSearch]);
 
     const choose = (room: Room) => {
         if (active.current === room.id) {
@@ -449,6 +460,118 @@ export default function DiverText({
             );
         } finally {
             setStarting(false);
+        }
+    };
+    const createGroup = async () => {
+        if (!groupName.trim() || groupMembers.length < 2) {
+            return;
+        }
+
+        setStarting(true);
+        setPeopleError('');
+
+        try {
+            const room = await chatRequest<Room>('/divertext/groups', 'POST', {
+                name: groupName.trim(),
+                member_ids: groupMembers,
+            });
+
+            if (!mounted.current) {
+                return;
+            }
+
+            setRooms((current) => [
+                room,
+                ...current.filter((item) => item.id !== room.id),
+            ]);
+            choose(room);
+            setGroupOpen(false);
+            setGroupName('');
+            setGroupMembers([]);
+        } catch (reason) {
+            setPeopleError(
+                reason instanceof Error
+                    ? reason.message
+                    : 'Unable to create group chat.',
+            );
+        } finally {
+            setStarting(false);
+        }
+    };
+    const openMemberManager = async () => {
+        if (!selected?.can_manage_members) {
+            return;
+        }
+
+        const room = selected;
+        setManageOpen(true);
+        setManageLoading(true);
+        setPeopleSearch('');
+        setPeople([]);
+        setPeopleError('');
+
+        try {
+            const data = await chatRequest<MemberPage>(
+                `/divertext/${room.id}/members`,
+            );
+
+            if (!mounted.current || active.current !== room.id) {
+                return;
+            }
+
+            setExistingMembers(data.members);
+            setManageMembers(
+                data.members
+                    .filter((member) => member.id !== data.creator_id)
+                    .map((member) => member.id),
+            );
+        } catch (reason) {
+            setPeopleError(
+                reason instanceof Error
+                    ? reason.message
+                    : 'Unable to load group members.',
+            );
+        } finally {
+            if (mounted.current) {
+                setManageLoading(false);
+            }
+        }
+    };
+    const saveMembers = async () => {
+        if (!selected || manageMembers.length < 1) {
+            return;
+        }
+
+        const id = selected.id;
+        setManageSaving(true);
+        setPeopleError('');
+
+        try {
+            const room = await chatRequest<Room>(
+                `/divertext/${id}/members`,
+                'PATCH',
+                { member_ids: manageMembers },
+            );
+
+            if (!mounted.current) {
+                return;
+            }
+
+            setSelected(room);
+            setRooms((current) =>
+                current.map((item) => (item.id === room.id ? room : item)),
+            );
+            setManageOpen(false);
+        } catch (reason) {
+            setPeopleError(
+                reason instanceof Error
+                    ? reason.message
+                    : 'Unable to update group members.',
+            );
+        } finally {
+            if (mounted.current) {
+                setManageSaving(false);
+            }
         }
     };
     const send = async () => {
@@ -530,17 +653,36 @@ export default function DiverText({
                             Stay connected with your colleagues and teams.
                         </p>
                     </div>
-                    <Button
-                        variant="contained"
-                        startIcon={<Plus size={17} />}
-                        onClick={() => {
-                            setNewOpen(true);
-                            setPeopleSearch('');
-                            setPeople([]);
-                        }}
-                    >
-                        New message
-                    </Button>
+                    <div className="flex flex-wrap justify-end gap-2">
+                        {['admin', 'team_leader'].includes(auth.user.role) && (
+                            <Button
+                                variant="outlined"
+                                startIcon={<Users size={17} />}
+                                onClick={() => {
+                                    setGroupOpen(true);
+                                    setGroupName('');
+                                    setGroupMembers([]);
+                                    setPeopleSearch('');
+                                    setPeople([]);
+                                    setPeopleError('');
+                                }}
+                            >
+                                New group
+                            </Button>
+                        )}
+                        <Button
+                            variant="contained"
+                            startIcon={<Plus size={17} />}
+                            onClick={() => {
+                                setNewOpen(true);
+                                setPeopleSearch('');
+                                setPeople([]);
+                                setPeopleError('');
+                            }}
+                        >
+                            New message
+                        </Button>
+                    </div>
                 </header>
                 <div
                     className={`grid min-h-0 flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${embedded ? '' : 'md:grid-cols-[300px_minmax(0,1fr)] lg:grid-cols-[340px_minmax(0,1fr)]'}`}
@@ -569,6 +711,7 @@ export default function DiverText({
                                     ['all', 'All'],
                                     ['direct', 'Direct'],
                                     ['team', 'Teams'],
+                                    ['group', 'Groups'],
                                 ].map(([value, label]) => (
                                     <button
                                         key={value}
@@ -600,7 +743,7 @@ export default function DiverText({
                                     <ChatAvatar
                                         name={room.name}
                                         avatar={room.avatar}
-                                        group={room.type === 'team'}
+                                        group={room.type !== 'direct'}
                                     />
                                     <div className="min-w-0 flex-1">
                                         <p className="truncate text-sm font-bold text-slate-800">
@@ -654,7 +797,7 @@ export default function DiverText({
                                     <ChatAvatar
                                         name={selected.name}
                                         avatar={selected.avatar}
-                                        group={selected.type === 'team'}
+                                        group={selected.type !== 'direct'}
                                     />
                                     <div className="min-w-0 flex-1">
                                         <h2 className="truncate font-bold text-slate-900">
@@ -663,10 +806,38 @@ export default function DiverText({
                                         <p className="truncate text-xs text-slate-500">
                                             {selected.type === 'team'
                                                 ? 'Team members, team leader, and admins'
-                                                : 'Private conversation'}{' '}
+                                                : selected.type === 'group'
+                                                  ? 'Private group conversation'
+                                                  : 'Private conversation'}{' '}
                                             · {selected.subtitle}
                                         </p>
                                     </div>
+                                    {selected.can_manage_members && (
+                                        <Button
+                                            variant="outlined"
+                                            size="small"
+                                            startIcon={
+                                                <UserRoundCog size={17} />
+                                            }
+                                            onClick={() =>
+                                                void openMemberManager()
+                                            }
+                                            className="!hidden sm:!inline-flex"
+                                        >
+                                            Members
+                                        </Button>
+                                    )}
+                                    {selected.can_manage_members && (
+                                        <IconButton
+                                            aria-label="Manage group members"
+                                            onClick={() =>
+                                                void openMemberManager()
+                                            }
+                                            className="sm:!hidden"
+                                        >
+                                            <UserRoundCog size={19} />
+                                        </IconButton>
+                                    )}
                                     <IconButton
                                         aria-label="Refresh messages"
                                         disabled={loading}
@@ -988,6 +1159,276 @@ export default function DiverText({
                             </p>
                         )}
                     </div>
+                </DialogContent>
+            </Dialog>
+            <Dialog
+                open={groupOpen}
+                onClose={() => {
+                    if (!starting) {
+                        setGroupOpen(false);
+                    }
+                }}
+                fullWidth
+                maxWidth="sm"
+                scroll="paper"
+                slotProps={{
+                    paper: { sx: { borderRadius: 3, maxHeight: '88dvh' } },
+                }}
+            >
+                <DialogTitle sx={{ fontWeight: 800, pr: 7 }}>
+                    Create group chat
+                </DialogTitle>
+                <IconButton
+                    aria-label="Close group chat form"
+                    disabled={starting}
+                    onClick={() => setGroupOpen(false)}
+                    sx={{ position: 'absolute', right: 12, top: 12 }}
+                >
+                    <X size={20} />
+                </IconButton>
+                <DialogContent dividers>
+                    <TextField
+                        fullWidth
+                        autoFocus
+                        label="Group name"
+                        value={groupName}
+                        onChange={(event) => setGroupName(event.target.value)}
+                        slotProps={{ htmlInput: { maxLength: 80 } }}
+                    />
+                    <TextField
+                        fullWidth
+                        label="Search employee name or ID"
+                        value={peopleSearch}
+                        onChange={(event) =>
+                            setPeopleSearch(event.target.value)
+                        }
+                        sx={{ mt: 2 }}
+                        slotProps={{ htmlInput: { maxLength: 100 } }}
+                    />
+                    <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+                        <span>
+                            Select at least two coworkers. You are included
+                            automatically.
+                        </span>
+                        <strong className="shrink-0 text-red-800">
+                            {groupMembers.length} selected
+                        </strong>
+                    </div>
+                    {peopleError && (
+                        <Alert severity="error" sx={{ mt: 2 }}>
+                            {peopleError}
+                        </Alert>
+                    )}
+                    <div className="mt-4 space-y-1">
+                        {peopleLoading && (
+                            <p
+                                role="status"
+                                className="py-4 text-center text-sm text-slate-500"
+                            >
+                                Searching…
+                            </p>
+                        )}
+                        {people.map((person) => {
+                            const checked = groupMembers.includes(person.id);
+
+                            return (
+                                <label
+                                    key={person.id}
+                                    className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition ${checked ? 'border-red-200 bg-red-50' : 'border-transparent hover:bg-slate-50'}`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        disabled={starting}
+                                        onChange={() =>
+                                            setGroupMembers((current) =>
+                                                checked
+                                                    ? current.filter(
+                                                          (id) =>
+                                                              id !== person.id,
+                                                      )
+                                                    : [...current, person.id],
+                                            )
+                                        }
+                                        className="size-4 accent-red-700"
+                                    />
+                                    <ChatAvatar
+                                        name={person.name}
+                                        avatar={person.avatar}
+                                    />
+                                    <span className="min-w-0">
+                                        <span className="block font-semibold break-words text-slate-800">
+                                            {person.name}
+                                        </span>
+                                        <span className="block text-xs text-slate-500">
+                                            {person.username} ·{' '}
+                                            {person.role.replaceAll('_', ' ')}
+                                        </span>
+                                    </span>
+                                </label>
+                            );
+                        })}
+                        {!peopleLoading && !people.length && (
+                            <p className="py-6 text-center text-sm text-slate-500">
+                                No employees found.
+                            </p>
+                        )}
+                    </div>
+                    <Button
+                        fullWidth
+                        variant="contained"
+                        disabled={
+                            starting ||
+                            groupName.trim().length < 2 ||
+                            groupMembers.length < 2
+                        }
+                        onClick={() => void createGroup()}
+                        sx={{ mt: 2, minHeight: 46, borderRadius: 2 }}
+                    >
+                        {starting ? 'Creating group…' : 'Create group chat'}
+                    </Button>
+                </DialogContent>
+            </Dialog>
+            <Dialog
+                open={manageOpen}
+                onClose={() => {
+                    if (!manageSaving) {
+                        setManageOpen(false);
+                    }
+                }}
+                fullWidth
+                maxWidth="sm"
+                scroll="paper"
+                slotProps={{
+                    paper: { sx: { borderRadius: 3, maxHeight: '88dvh' } },
+                }}
+            >
+                <DialogTitle sx={{ fontWeight: 800, pr: 7 }}>
+                    Manage group members
+                </DialogTitle>
+                <IconButton
+                    aria-label="Close member manager"
+                    disabled={manageSaving}
+                    onClick={() => setManageOpen(false)}
+                    sx={{ position: 'absolute', right: 12, top: 12 }}
+                >
+                    <X size={20} />
+                </IconButton>
+                <DialogContent dividers>
+                    <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-slate-700">
+                        You remain the group manager and cannot remove yourself.
+                        Members you remove immediately lose access to this chat.
+                    </div>
+                    <TextField
+                        fullWidth
+                        label="Search employee name or ID"
+                        value={peopleSearch}
+                        onChange={(event) =>
+                            setPeopleSearch(event.target.value)
+                        }
+                        sx={{ mt: 2 }}
+                        slotProps={{ htmlInput: { maxLength: 100 } }}
+                    />
+                    <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+                        <span>
+                            Keep at least one other member in the group.
+                        </span>
+                        <strong className="shrink-0 text-red-800">
+                            {manageMembers.length + 1} members
+                        </strong>
+                    </div>
+                    {peopleError && (
+                        <Alert severity="error" sx={{ mt: 2 }}>
+                            {peopleError}
+                        </Alert>
+                    )}
+                    <div className="mt-4 space-y-1">
+                        {(manageLoading || peopleLoading) && (
+                            <p
+                                role="status"
+                                className="py-4 text-center text-sm text-slate-500"
+                            >
+                                Loading members…
+                            </p>
+                        )}
+                        {[
+                            ...new Map(
+                                [...existingMembers, ...people].map(
+                                    (person) => [person.id, person],
+                                ),
+                            ).values(),
+                        ]
+                            .filter((person) => person.id !== auth.user.id)
+                            .filter((person) =>
+                                `${person.name} ${person.username}`
+                                    .toLowerCase()
+                                    .includes(peopleSearch.toLowerCase()),
+                            )
+                            .map((person) => {
+                                const checked = manageMembers.includes(
+                                    person.id,
+                                );
+
+                                return (
+                                    <label
+                                        key={person.id}
+                                        className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition ${checked ? 'border-red-200 bg-red-50' : 'border-transparent hover:bg-slate-50'}`}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            disabled={
+                                                manageSaving || manageLoading
+                                            }
+                                            onChange={() =>
+                                                setManageMembers((current) =>
+                                                    checked
+                                                        ? current.filter(
+                                                              (id) =>
+                                                                  id !==
+                                                                  person.id,
+                                                          )
+                                                        : [
+                                                              ...current,
+                                                              person.id,
+                                                          ],
+                                                )
+                                            }
+                                            className="size-4 accent-red-700"
+                                        />
+                                        <ChatAvatar
+                                            name={person.name}
+                                            avatar={person.avatar}
+                                        />
+                                        <span className="min-w-0">
+                                            <span className="block font-semibold break-words text-slate-800">
+                                                {person.name}
+                                            </span>
+                                            <span className="block text-xs text-slate-500">
+                                                {person.username} ·{' '}
+                                                {person.role.replaceAll(
+                                                    '_',
+                                                    ' ',
+                                                )}
+                                            </span>
+                                        </span>
+                                    </label>
+                                );
+                            })}
+                    </div>
+                    <Button
+                        fullWidth
+                        variant="contained"
+                        disabled={
+                            manageSaving ||
+                            manageLoading ||
+                            manageMembers.length < 1
+                        }
+                        onClick={() => void saveMembers()}
+                        sx={{ mt: 2, minHeight: 46, borderRadius: 2 }}
+                    >
+                        {manageSaving ? 'Saving members…' : 'Save members'}
+                    </Button>
                 </DialogContent>
             </Dialog>
         </>

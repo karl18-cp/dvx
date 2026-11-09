@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'assessment.manager' => EnsureAssessmentManager::class,
             'qa.viewer' => EnsureQaViewer::class,
+            'permission' => \App\Http\Middleware\EnsurePermission::class,
         ]);
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 

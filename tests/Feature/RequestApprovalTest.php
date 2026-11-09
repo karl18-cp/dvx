@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\LeaveRequest;
 use App\Models\OvertimeRequest;
-use App\Models\UndertimeRequest;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -46,6 +45,11 @@ class RequestApprovalTest extends TestCase
     {
         $admin = User::factory()->create(['username' => 'DVX001', 'role' => 'admin']);
         $employee = User::factory()->create(['username' => 'DVX002', 'role' => 'agent']);
+        $employee->personalInformation()->create([
+            'email' => $employee->email, 'birth_date' => '1995-01-01', 'start_date' => '2024-01-01',
+            'gender' => 'Other', 'civil_status' => 'Single', 'phone' => '09123456789', 'address' => 'Test address',
+            'emergency_contact_name' => 'Contact', 'emergency_contact_relationship' => 'Parent', 'emergency_contact_phone' => '09123456788',
+        ]);
         $leave = LeaveRequest::query()->create([
             'user_id' => $employee->id,
             'start_date' => '2026-08-10', 'end_date' => '2026-08-10',

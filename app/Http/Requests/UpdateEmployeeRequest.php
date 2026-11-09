@@ -11,7 +11,7 @@ class UpdateEmployeeRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->role === 'admin';
+        return app(\App\Services\RolePermissionService::class)->can($this->user(), 'employees.manage');
     }
 
     /**

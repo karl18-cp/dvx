@@ -2,6 +2,7 @@ import { createInertiaApp } from '@inertiajs/react';
 import { CssBaseline, ThemeProvider } from '@mui/material';
 import '@fontsource-variable/manrope';
 import { ConfirmationProvider } from '@/components/confirmation-provider';
+import PageLoadingScreen from '@/components/page-loading-screen';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
@@ -32,14 +33,13 @@ createInertiaApp({
                 <CssBaseline />
                 <TooltipProvider delayDuration={0}>
                     <ConfirmationProvider>{app}</ConfirmationProvider>
+                    <PageLoadingScreen />
                     <Toaster />
                 </TooltipProvider>
             </ThemeProvider>
         );
     },
-    progress: {
-        color: '#4B5563',
-    },
+    progress: false,
 });
 
 // This will set light / dark mode on load...

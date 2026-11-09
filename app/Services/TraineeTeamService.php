@@ -28,7 +28,7 @@ class TraineeTeamService
 
     public function assign(User $actor, User $trainee, Team $team): void
     {
-        abort_unless($actor->role === 'admin' && $actor->canAccessAccount(), 403);
+        abort_unless(app(RolePermissionService::class)->can($actor, 'trainees.manage'), 403);
         DB::transaction(function () use ($actor, $trainee, $team) {
             $trainee = User::whereKey($trainee->id)->lockForUpdate()->firstOrFail();
             abort_unless($trainee->role === 'trainee', 422);

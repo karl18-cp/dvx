@@ -53,7 +53,7 @@ class AccountLifecycleTest extends TestCase
         $this->actingAs($qa)->patch('/account-statuses/'.$admin->id, ['status' => 'suspended'])->assertForbidden();
         $this->patch('/account-statuses/'.$agent->id, ['status' => 'active'])->assertSessionHasNoErrors();
         $this->actingAs($admin)->patch('/account-statuses/'.$admin->id, ['status' => 'terminated'])->assertSessionHasErrors('status');
-        $this->assertDatabaseHas('assessment_activity_logs', ['action' => 'Account status changed', 'target_id' => $agent->id]);
+        $this->assertDatabaseHas('activity_logs', ['action' => 'Account status changed', 'target_id' => $agent->id]);
     }
 
     public function test_qa_can_pass_and_fail_trainees_without_converting_or_creating_employee_accounts(): void

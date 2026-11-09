@@ -1,4 +1,4 @@
-import { useForm } from '@inertiajs/react';
+import { router, useForm } from '@inertiajs/react';
 import {
     Alert,
     Button,
@@ -24,7 +24,7 @@ type Employee = {
 type Contract = {
     id: number;
     user_id: number;
-    contract_type: 'training' | 'employment';
+    contract_type: 'training' | 'employment' | 'quitclaim';
     title: string;
     reference_number: string | null;
     effective_date: string;
@@ -36,6 +36,16 @@ type Contract = {
     file_size: number;
     archived_at: string | null;
     archive_reason: string | null;
+    version: number;
+    signing_status: 'draft' | 'issued' | 'signed' | 'declined' | 'superseded';
+    issued_at: string | null;
+    signature_due_at: string | null;
+    signed_pdf_path?: string | null;
+    signature?: {
+        signer_name: string;
+        signed_at: string;
+        signature_hash: string;
+    } | null;
     employee: Employee;
     creator?: { name: string };
     updater?: { name: string };
@@ -50,6 +60,7 @@ type Result = {
     summary: {
         training: number;
         employment: number;
+        quitclaim: number;
         active: number;
         archived: number;
     };
@@ -295,6 +306,7 @@ export default function EmployeeContracts({
                     <MenuItem value="">All types</MenuItem>
                     <MenuItem value="training">Training</MenuItem>
                     <MenuItem value="employment">Employment</MenuItem>
+                    <MenuItem value="quitclaim">Quitclaim</MenuItem>
                 </TextField>
                 <TextField
                     size="small"
@@ -358,7 +370,8 @@ export default function EmployeeContracts({
                                         {record.title}
                                     </p>
                                     <p className="text-xs text-slate-500 capitalize">
-                                        {record.contract_type} contract
+                                        {record.contract_type} contract ·
+                                        Version {record.version}
                                         {record.reference_number
                                             ? ` · ${record.reference_number}`
                                             : ''}
@@ -391,6 +404,9 @@ export default function EmployeeContracts({
                                                 : record.status
                                         }
                                     />
+                                    <p className="mt-1 text-xs font-semibold text-slate-500 capitalize">
+                                        Signing: {record.signing_status}
+                                    </p>
                                 </td>
                                 <td className="p-3 text-right">
                                     <Button
@@ -503,6 +519,9 @@ export default function EmployeeContracts({
                                 </MenuItem>
                                 <MenuItem value="employment">
                                     Employment contract
+                                </MenuItem>
+                                <MenuItem value="quitclaim">
+                                    Quitclaim / release
                                 </MenuItem>
                             </TextField>
                             <TextField
@@ -661,6 +680,16 @@ export default function EmployeeContracts({
                                     </p>
                                 </div>
                                 <div>
+                                    <p className="text-slate-500">Version</p>
+                                    <p>Version {detail.version}</p>
+                                </div>
+                                <div>
+                                    <p className="text-slate-500">Signing</p>
+                                    <p className="font-semibold capitalize">
+                                        {detail.signing_status}
+                                    </p>
+                                </div>
+                                <div>
                                     <p className="text-slate-500">Effective</p>
                                     <p>{detail.effective_date}</p>
                                 </div>
@@ -701,18 +730,84 @@ export default function EmployeeContracts({
                 <DialogActions sx={{ p: 3, gap: 1 }}>
                     {detail && !detail.archived_at && (
                         <>
-                            <Button onClick={() => openEdit(detail)}>
-                                Edit contract
-                            </Button>
-                            <Button
-                                color="error"
-                                onClick={() => {
-                                    archive.reset();
-                                    setArchiveOpen(true);
-                                }}
-                            >
-                                Archive
-                            </Button>
+                            {detail.signing_status === 'draft' && (
+                                <Button onClick={() => openEdit(detail)}>
+                                    Edit contract
+                                </Button>
+                            )}
+                            {detail.signing_status === 'draft' && (
+                                <Button
+                                    variant="contained"
+                                    onClick={() =>
+                                        router.post(
+                                            `/accounting/contracts/${detail.id}/issue`,
+                                            {},
+                                            {
+                                                preserveScroll: true,
+                                                onSuccess: () => {
+                                                    setDetail(null);
+                                                    refresh(
+                                                        'Contract issued for signature.',
+                                                    );
+                                                },
+                                            },
+                                        )
+                                    }
+                                >
+                                    Issue for signature
+                                </Button>
+                            )}
+                            {['issued', 'signed', 'declined'].includes(
+                                detail.signing_status,
+                            ) && (
+                                <Button component="label" variant="outlined">
+                                    New version
+                                    <input
+                                        hidden
+                                        type="file"
+                                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                                        onChange={(event) => {
+                                            const document =
+                                                event.target.files?.[0];
+                                            if (document)
+                                                router.post(
+                                                    `/accounting/contracts/${detail.id}/versions`,
+                                                    { document },
+                                                    {
+                                                        forceFormData: true,
+                                                        preserveScroll: true,
+                                                        onSuccess: () => {
+                                                            setDetail(null);
+                                                            refresh(
+                                                                'New contract version created.',
+                                                            );
+                                                        },
+                                                    },
+                                                );
+                                        }}
+                                    />
+                                </Button>
+                            )}
+                            {detail.signing_status === 'signed' && (
+                                <Button
+                                    href={`/my-contracts/${detail.id}/signed`}
+                                >
+                                    Signed PDF
+                                </Button>
+                            )}
+                            {!['issued', 'signed'].includes(
+                                detail.signing_status,
+                            ) && (
+                                <Button
+                                    color="error"
+                                    onClick={() => {
+                                        archive.reset();
+                                        setArchiveOpen(true);
+                                    }}
+                                >
+                                    Archive
+                                </Button>
+                            )}
                         </>
                     )}
                 </DialogActions>

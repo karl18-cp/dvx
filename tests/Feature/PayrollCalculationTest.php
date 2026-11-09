@@ -119,7 +119,7 @@ class PayrollCalculationTest extends TestCase
         $this->assertSame(1440, $r['minutes']['basic_hours']);
     }
 
-    public function test_changed_attendance_blocks_approval_and_payment_and_old_drafts_require_recreation(): void
+    public function test_changed_attendance_blocks_workflow_until_lock_and_old_drafts_require_recreation(): void
     {
         $u = $this->employee();
         $this->clock($u, '2026-10-11');
@@ -128,13 +128,14 @@ class PayrollCalculationTest extends TestCase
         $entry = AccountingEntry::sole();
         $url = '/accounting/entries/'.$entry->id;
         app(AttendanceScheduleService::class)->record($u->fresh(), '2026-10-11', 'time_in', '09:00');
-        $this->patch($url, ['action' => 'approve'])->assertSessionHasErrors('entry');
+        $this->patch($url, ['action' => 'submit'])->assertSessionHasErrors('entry');
         app(AttendanceScheduleService::class)->record($u->fresh(), '2026-10-11', 'time_in', '08:00');
+        $this->patch($url, ['action' => 'submit'])->assertSessionHasNoErrors();
         $this->patch($url, ['action' => 'approve'])->assertSessionHasNoErrors();
         $this->clock($u, '2026-10-12');
-        $this->patch($url, ['action' => 'pay', 'paid_at' => now()->toDateString(), 'payment_method' => 'cash', 'payment_reference' => 'TEST'])->assertSessionHasErrors('entry');
+        $this->patch($url, ['action' => 'lock'])->assertSessionHasErrors('entry');
         $entry->forceFill(['status' => 'draft', 'source_snapshot' => ['payroll' => ['version' => 1]]])->save();
-        $this->patch($url, ['action' => 'approve'])->assertSessionHasErrors('entry');
+        $this->patch($url, ['action' => 'submit'])->assertSessionHasErrors('entry');
     }
 
     public function test_calendar_edges_exact_minutes_and_invalid_input(): void

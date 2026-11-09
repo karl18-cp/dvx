@@ -12,7 +12,17 @@ class AccountingService
 {
     public function authorize(User $actor): void
     {
-        abort_unless($actor->canAccessAccount() && in_array($actor->role, ['admin', 'accounting'], true), 403);
+        abort_unless(app(RolePermissionService::class)->can($actor, 'salaries.view'), 403);
+    }
+
+    public function authorizeFinance(User $actor): void
+    {
+        abort_unless(app(RolePermissionService::class)->can($actor, 'finance.manage'), 403);
+    }
+
+    public function authorizePayroll(User $actor): void
+    {
+        abort_unless(app(RolePermissionService::class)->can($actor, 'payroll.manage'), 403);
     }
 
     public function money(string $value): int
@@ -24,7 +34,7 @@ class AccountingService
 
     public function payroll(User $actor, array $data): AccountingEntry
     {
-        $this->authorize($actor);
+        $this->authorizePayroll($actor);
 
         return DB::transaction(function () use ($actor, $data) {
             $employee = User::whereKey($data['user_id'])->lockForUpdate()->firstOrFail();
@@ -72,13 +82,13 @@ class AccountingService
             'can_prepare' => $ready && (! $first || $first->status === 'paid') && count($rows) > 0 && array_sum(array_column($rows, 'amount_cents')) > 0,
             'pending_first' => $first && $first->status !== 'paid',
             'paid_cents' => $entries->where('status', 'paid')->sum('net_cents'),
-            'reserved_cents' => $entries->whereIn('status', ['draft', 'approved'])->sum('net_cents'),
+            'reserved_cents' => $entries->whereIn('status', ['draft', 'for_review', 'approved', 'locked'])->sum('net_cents'),
         ];
     }
 
     public function allowance(User $actor, TrainingPlan $plan, User $trainee, array $data): AccountingEntry
     {
-        $this->authorize($actor);
+        $this->authorizePayroll($actor);
 
         return DB::transaction(function () use ($actor, $plan, $trainee, $data) {
             $plan = TrainingPlan::whereKey($plan->id)->lockForUpdate()->firstOrFail();
@@ -148,36 +158,56 @@ class AccountingService
 
     public function transition(User $actor, AccountingEntry $entry, array $data): void
     {
-        $this->authorize($actor);
+        $this->authorizePayroll($actor);
         DB::transaction(function () use ($actor, $entry, $data) {
             $entry = AccountingEntry::whereKey($entry->id)->lockForUpdate()->firstOrFail();
             $before = $entry->status;
-            if ($data['action'] === 'approve') {
+            if ($data['action'] === 'submit') {
                 if ($before !== 'draft') {
-                    throw ValidationException::withMessages(['entry' => 'Only a draft can be approved.']);
+                    throw ValidationException::withMessages(['entry' => 'Only a draft can be submitted for review.']);
+                }
+                $this->verifyAllowance($entry);
+                $this->verifyPayroll($entry);
+                $entry->fill(['status' => 'for_review', 'submitted_by' => $actor->id, 'submitted_at' => now()]);
+            } elseif ($data['action'] === 'approve') {
+                if ($before !== 'for_review') {
+                    throw ValidationException::withMessages(['entry' => 'Only an entry that is for review can be approved.']);
                 }
                 $this->verifyAllowance($entry);
                 $this->verifyPayroll($entry);
                 $entry->fill(['status' => 'approved', 'approved_by' => $actor->id, 'approved_at' => now()]);
-            } elseif ($data['action'] === 'pay') {
+            } elseif ($data['action'] === 'lock') {
                 if ($before !== 'approved') {
-                    throw ValidationException::withMessages(['entry' => 'Approve the entry before recording payment.']);
+                    throw ValidationException::withMessages(['entry' => 'Only an approved entry can be locked.']);
                 }
                 $this->verifyAllowance($entry);
                 $this->verifyPayroll($entry);
-                $entry->fill(['status' => 'paid', 'paid_by' => $actor->id, 'paid_at' => $data['paid_at'], 'payment_method' => $data['payment_method'], 'payment_reference' => $data['payment_reference']]);
-            } else {
-                if ($before === 'void') {
-                    throw ValidationException::withMessages(['entry' => 'This entry is already void.']);
+                $entry->fill(['status' => 'locked', 'locked_by' => $actor->id, 'locked_at' => now()]);
+            } elseif ($data['action'] === 'pay') {
+                if ($before !== 'locked') {
+                    throw ValidationException::withMessages(['entry' => 'Lock the approved entry before recording payment.']);
                 }
-                if ($before === 'paid') {
-                    throw ValidationException::withMessages(['entry' => 'Recorded payments are read-only. A void does not reverse an actual payment.']);
+                $entry->fill(['status' => 'paid', 'paid_by' => $actor->id, 'paid_at' => $data['paid_at'], 'payment_method' => $data['payment_method'], 'payment_reference' => $data['payment_reference']]);
+            } elseif ($data['action'] === 'return') {
+                if (! in_array($before, ['for_review', 'approved'], true)) {
+                    throw ValidationException::withMessages(['entry' => 'Only an entry under review or approved can be returned to draft.']);
+                }
+                $entry->fill([
+                    'status' => 'draft', 'submitted_by' => null, 'submitted_at' => null,
+                    'approved_by' => null, 'approved_at' => null,
+                ]);
+            } else {
+                if (! in_array($before, ['draft', 'for_review'], true)) {
+                    throw ValidationException::withMessages(['entry' => 'Only a draft or entry for review can be voided. Locked records require a documented adjustment or reversal.']);
                 }
                 $entry->fill(['status' => 'void', 'voided_by' => $actor->id, 'voided_at' => now(), 'void_reason' => $data['void_reason']]);
                 DB::table('accounting_allowance_days')->where('entry_id', $entry->id)->delete();
             }
             $entry->save();
-            $this->audit($actor, $entry, 'Accounting entry '.$entry->status, ['previous_status' => $before]);
+            $this->audit($actor, $entry, 'Accounting entry '.$entry->status, [
+                'previous_status' => $before,
+                'transition_reason' => $data['transition_reason'] ?? $data['void_reason'] ?? null,
+            ]);
             if ($entry->status === 'paid') {
                 app(AssessmentNotificationService::class)->createForUser(
                     $entry->employee,
@@ -191,8 +221,67 @@ class AccountingService
         });
     }
 
+    public function correction(User $actor, AccountingEntry $original, array $data): AccountingEntry
+    {
+        $this->authorizePayroll($actor);
+
+        return DB::transaction(function () use ($actor, $original, $data) {
+            $original = AccountingEntry::whereKey($original->id)->lockForUpdate()->firstOrFail();
+            if (! in_array($original->status, ['locked', 'paid'], true)) {
+                throw ValidationException::withMessages(['entry' => 'Adjustments and reversals are only used after an entry is locked. Return or void an earlier entry instead.']);
+            }
+            if ($original->kind !== 'payroll') {
+                throw ValidationException::withMessages(['entry' => 'Documented payroll corrections can only be created for payroll records.']);
+            }
+            if ($existing = AccountingEntry::where('request_key', $data['request_key'])->first()) {
+                return $existing;
+            }
+            if ($data['correction_type'] === 'reversal' && AccountingEntry::where('parent_entry_id', $original->id)->where('correction_type', 'reversal')->where('status', '!=', 'void')->exists()) {
+                throw ValidationException::withMessages(['entry' => 'This payroll already has an active reversal record.']);
+            }
+
+            $amount = $data['correction_type'] === 'reversal' ? $original->net_cents : $this->money($data['amount']);
+            if ($amount < 1) {
+                throw ValidationException::withMessages(['amount' => 'The correction amount must be greater than zero.']);
+            }
+            $direction = $data['correction_type'] === 'reversal' ? 'debit' : $data['correction_direction'];
+            $entry = AccountingEntry::create([
+                'request_key' => $data['request_key'],
+                'kind' => 'payroll_adjustment',
+                'user_id' => $original->user_id,
+                'parent_entry_id' => $original->id,
+                'correction_type' => $data['correction_type'],
+                'correction_direction' => $direction,
+                'correction_reason' => $data['reason'],
+                'description' => $data['description'],
+                'period_start' => $original->period_start,
+                'period_end' => $original->period_end,
+                'gross_cents' => $amount,
+                'deduction_cents' => 0,
+                'net_cents' => $amount,
+                'notes' => $data['reason'],
+                'created_by' => $actor->id,
+                'source_snapshot' => [
+                    'employee_name' => $original->source_snapshot['employee_name'] ?? $original->employee->name,
+                    'employee_id' => $original->source_snapshot['employee_id'] ?? $original->employee->username,
+                    'original_entry_id' => $original->id,
+                    'original_status' => $original->status,
+                    'original_net_cents' => $original->net_cents,
+                ],
+            ]);
+            $this->audit($actor, $entry, 'Payroll '.$data['correction_type'].' draft created', [
+                'original_entry_id' => $original->id,
+                'direction' => $direction,
+                'amount_cents' => $amount,
+                'reason' => $data['reason'],
+            ]);
+
+            return $entry;
+        });
+    }
+
     private function audit(User $actor, AccountingEntry $entry, string $action, array $extra = []): void
     {
-        DB::table('assessment_activity_logs')->insert(['actor_id' => $actor->id, 'action' => $action, 'target_type' => AccountingEntry::class, 'target_id' => $entry->id, 'metadata' => json_encode([...$extra, 'entry' => $entry->toArray()], JSON_THROW_ON_ERROR), 'created_at' => now()]);
+        app(AuditLogService::class)->record($actor, 'payroll', $action, $entry, metadata: [...$extra, 'entry' => $entry->toArray()], subjectId: $entry->user_id);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AccountingExpense;
 use App\Services\AccountingService;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -36,7 +37,7 @@ class AccountingExpenseController extends Controller
 
     public function category(Request $request, AccountingService $service, ?int $category = null)
     {
-        $service->authorize($request->user());
+        $service->authorizeFinance($request->user());
         if ($category !== null) {
             abort_unless(DB::table('expense_categories')->where('id', $category)->exists(), 404);
         }
@@ -61,7 +62,7 @@ class AccountingExpenseController extends Controller
 
     public function store(Request $request, AccountingService $service)
     {
-        $service->authorize($request->user());
+        $service->authorizeFinance($request->user());
         $data = $request->validate([
             'request_key' => ['required', 'uuid'], 'category_id' => ['required', 'integer', 'exists:expense_categories,id'],
             'expense_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:'.now('Asia/Manila')->toDateString()],
@@ -86,7 +87,7 @@ class AccountingExpenseController extends Controller
 
     public function void(Request $request, AccountingExpense $expense, AccountingService $service)
     {
-        $service->authorize($request->user());
+        $service->authorizeFinance($request->user());
         $data = $request->validate(['void_reason' => ['required', 'string', 'min:5', 'max:2000']]);
         DB::transaction(function () use ($request, $expense, $data) {
             $expense = AccountingExpense::whereKey($expense->id)->lockForUpdate()->firstOrFail();
@@ -102,6 +103,6 @@ class AccountingExpenseController extends Controller
 
     private function audit(Request $request, string $action, string $type, int $id, array $metadata): void
     {
-        DB::table('assessment_activity_logs')->insert(['actor_id' => $request->user()->id, 'action' => $action, 'target_type' => $type, 'target_id' => $id, 'metadata' => json_encode($metadata, JSON_THROW_ON_ERROR), 'created_at' => now()]);
+        app(AuditLogService::class)->record($request->user(), 'payroll', $action, $type, $id, $metadata);
     }
 }

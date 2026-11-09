@@ -48,7 +48,7 @@ class SanctionTest extends TestCase
             $this->assertSame('active', $employee->fresh()->status);
         }
         $this->assertDatabaseCount('employee_sanctions', 7);
-        $this->assertDatabaseHas('assessment_activity_logs', ['action' => 'Sanction Issued']);
+        $this->assertDatabaseHas('activity_logs', ['action' => 'Sanction Issued']);
     }
 
     public function test_retries_do_not_duplicate_records_and_reused_submission_ids_cannot_change_them(): void
@@ -60,7 +60,7 @@ class SanctionTest extends TestCase
         $this->actingAs($admin)->post('/sanctions/issue', $data)->assertSessionHasNoErrors();
         $this->post('/sanctions/issue', $data)->assertSessionHasNoErrors();
         $this->assertDatabaseCount('employee_sanctions', 1);
-        $this->assertDatabaseCount('assessment_activity_logs', 1);
+        $this->assertDatabaseCount('activity_logs', 1);
         $this->post('/sanctions/issue', [...$data, 'punishment' => 'Final Written'])->assertSessionHasErrors('request_id');
         $this->assertDatabaseCount('employee_sanctions', 1);
         $this->assertSame('Documented Verbal', EmployeeSanction::query()->sole()->punishment);

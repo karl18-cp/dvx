@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class EmployeeContract extends Model
 {
@@ -18,6 +19,11 @@ class EmployeeContract extends Model
             'end_date' => 'date:Y-m-d',
             'file_size' => 'integer',
             'archived_at' => 'datetime',
+            'version' => 'integer',
+            'issued_at' => 'datetime',
+            'signature_due_at' => 'datetime',
+            'immutable_at' => 'datetime',
+            'declined_at' => 'datetime',
         ];
     }
 
@@ -37,5 +43,10 @@ class EmployeeContract extends Model
     public function updater(): BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function signature(): HasOne
+    {
+        return $this->hasOne(EmployeeContractSignature::class);
     }
 }

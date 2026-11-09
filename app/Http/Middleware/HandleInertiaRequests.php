@@ -64,6 +64,7 @@ class HandleInertiaRequests extends Middleware
             'name' => config('app.name'),
             'auth' => [
                 'user' => $request->user(),
+                'permissions' => $request->user() ? app(\App\Services\RolePermissionService::class)->permissionsFor($request->user()) : [],
             ],
             'assessment_notifications' => fn () => $request->user() ? [
                 'unread_count' => AssessmentNotification::query()->where('recipient_id', $request->user()->id)->whereNull('read_at')->count(),

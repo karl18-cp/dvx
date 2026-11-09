@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\DiverTextService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class DiverTextController extends Controller
@@ -25,6 +26,12 @@ class DiverTextController extends Controller
     private function authorizeRoom(User $user, ChatConversation $conversation): void
     {
         abort_unless($this->chat->visible($user)->whereKey($conversation->id)->exists(), 403);
+    }
+
+    private function authorizeGroupManager(User $user, ChatConversation $conversation): void
+    {
+        $this->authorizeRoom($user, $conversation);
+        abort_unless($conversation->type === 'group' && $conversation->created_by === $user->id, 403);
     }
 
     public function index(Request $request)
@@ -71,6 +78,76 @@ class DiverTextController extends Controller
         $room = ChatConversation::firstOrCreate(['conversation_key' => 'direct:'.implode(':', $ids)], ['type' => 'direct', 'first_user_id' => $ids[0], 'second_user_id' => $ids[1]]);
 
         return response()->json($this->chat->room($room, $user));
+    }
+
+    public function group(Request $request)
+    {
+        $user = $this->actor($request);
+        abort_unless(in_array($user->role, ['admin', 'team_leader'], true), 403);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'min:2', 'max:80'],
+            'member_ids' => ['required', 'array', 'min:2', 'max:49'],
+            'member_ids.*' => ['required', 'integer', 'distinct', 'exists:users,id'],
+        ]);
+        $memberIds = collect($data['member_ids'])->map(fn ($id) => (int) $id)->reject(fn ($id) => $id === $user->id)->unique()->values();
+        abort_if($memberIds->count() < 2, 422, 'Choose at least two coworkers.');
+        $allowed = $this->chat->people($user)->where('status', 'active')->whereIn('id', $memberIds)->pluck('id');
+        abort_unless($allowed->count() === $memberIds->count(), 403);
+        $room = DB::transaction(function () use ($user, $data, $memberIds) {
+            $room = ChatConversation::create([
+                'conversation_key' => 'group:'.Str::uuid(),
+                'type' => 'group',
+                'name' => trim($data['name']),
+                'created_by' => $user->id,
+            ]);
+            $room->members()->attach($memberIds->push($user->id)->all());
+
+            return $room;
+        });
+
+        return response()->json($this->chat->room($room->loadCount('members'), $user), 201);
+    }
+
+    public function members(Request $request, ChatConversation $conversation)
+    {
+        $user = $this->actor($request);
+        $this->authorizeGroupManager($user, $conversation);
+
+        return response()->json([
+            'creator_id' => $conversation->created_by,
+            'members' => $conversation->members()->orderBy('name')->get(['users.id', 'name', 'username', 'role', 'profile_photo_path'])
+                ->map(fn ($member) => $member->only(['id', 'name', 'username', 'role', 'avatar'])),
+        ]);
+    }
+
+    public function updateMembers(Request $request, ChatConversation $conversation)
+    {
+        $user = $this->actor($request);
+        $this->authorizeGroupManager($user, $conversation);
+        $data = $request->validate([
+            'member_ids' => ['required', 'array', 'min:1', 'max:49'],
+            'member_ids.*' => ['required', 'integer', 'distinct', 'exists:users,id'],
+        ]);
+        $requested = collect($data['member_ids'])->map(fn ($id) => (int) $id)->reject(fn ($id) => $id === $user->id)->unique()->values();
+        abort_if($requested->isEmpty(), 422, 'Keep at least one other member in the group.');
+
+        $current = $conversation->members()->pluck('users.id');
+        $additions = $requested->diff($current);
+        if ($additions->isNotEmpty()) {
+            $allowed = $this->chat->people($user)->where('status', 'active')->whereIn('id', $additions)->pluck('id');
+            abort_unless($allowed->count() === $additions->count(), 403);
+        }
+
+        DB::transaction(function () use ($conversation, $requested, $user) {
+            $locked = ChatConversation::whereKey($conversation->id)->lockForUpdate()->firstOrFail();
+            abort_unless($locked->type === 'group' && $locked->created_by === $user->id, 403);
+            $locked->members()->sync($requested->push($user->id)->unique()->all());
+            DB::table('chat_reads')->where('conversation_id', $locked->id)->whereNotIn('user_id', $requested)->where('user_id', '!=', $user->id)->delete();
+        });
+
+        $conversation->refresh()->loadCount('members');
+
+        return response()->json($this->chat->room($conversation, $user));
     }
 
     public function messages(Request $request, ChatConversation $conversation)
